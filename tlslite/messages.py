@@ -1815,24 +1815,59 @@ class metlsFinished(HandshakeMsg):
         self.version = version
         self.verify_data = bytearray(0)
         self.hash_length = hash_length
-        self.c_to_s_ro_mb_list = []
-        self.c_to_s_rw_mb_list = []
-        self.s_to_c_ro_mb_list = []
-        self.s_to_c_rw_mb_list = []
+        # each list contains a triple (id, access permission, symmetric key)
+        # id: bytearray, 64 bytes
+        # access permission: byte 0 for read only, 1 for read and write
+        # symmetric key: derived from ibe, 32 bytes long
+        self.c_to_s_mb_list = []
+        self.s_to_c_mb_list = []
 
-    def create(self, c_to_s_ro_mb_list, c_to_s_rw_mb_list, s_to_c_ro_mb_list, s_to_c_rw_mb_list, verify_data):
+    def create(self, c_to_s_mb_list, s_to_c_mb_list, verify_data):
         self.verify_data = verify_data
-        self.c_to_s_ro_mb_list = c_to_s_ro_mb_list
-        self.c_to_s_rw_mb_list = c_to_s_rw_mb_list
-        self.s_to_c_ro_mb_list = s_to_c_ro_mb_list
-        self.s_to_c_rw_mb_list = s_to_c_rw_mb_list
+        self.c_to_s_mb_list = c_to_s_mb_list
+        self.s_to_c_mb_list = s_to_c_mb_list
         return self
 
     def parse(self, p):
         # construct metlsFinished from parser
-
+        # p starts from length field of Handshake
+        p.startLengthCheck(3)
+        self.verify_data = p.getFixBytes(self.hash_length)
+        self.c_to_s_mb_list = []
+        self.s_to_c_mb_list = []
+        for _ in range(2):
+            list_type = p.get(1)
+            list_length = p.get(2)
+            if list_type == 0:
+                # read client to server middleboxes
+                for _ in range(list_length):
+                    middlebox_id = p.getFixBytes(64)
+                    middlebox_permission = p.get(1)
+                    self.c_to_s_mb_list.append((middlebox_id, middlebox_permission))
+            else:
+                # read server to client middleboxes
+                for _ in range(list_length):
+                    middlebox_id = p.getFixBytes(64)
+                    middlebox_permission = p.get(1)
+                    self.s_to_c_mb_list.append((middlebox_id, middlebox_permission))
+        p.stopLengthCheck()
+        return self
+        
     def write(self):
         # convert metlsFinished to byte array
+        w = Writer()
+        w.bytes += self.verify_data
+        w.add(0, 1) # client to server middlebox list 
+        w.add(len(self.c_to_s_mb_list), 2)
+        for entry in self.c_to_s_mb_list:
+            w.bytes += entry[0] # id
+            w.bytes += entry[1] # access permission
+        w.add(1, 1) # server to client middlebox list
+        w.add(len(self.s_to_c_mb_list), 2)
+        for entry in self.s_to_c_mb_list:
+            w.bytes += entry[0]
+            w.bytes += entry[1]
+        return self.postWrite(w) # add msg_type and length
 
 
 class Finished(HandshakeMsg):

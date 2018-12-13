@@ -1222,25 +1222,41 @@ class TLSConnection(TLSRecordLayer):
 
         transcript_hash = self._handshake_hash.digest(prfName)
 
-        for result in self._getMsg(ContentType.handshake,
-                                   HandshakeType.finished,
-                                   prf_size):
-            if result in (0, 1):
-                yield result
-            else:
-                break
-        finished = result
+        if self.enable_metls:
+            # get metlsFinished
+            for result in self._getMsg(ContentType.handshake, HandshakeType.metls_finished, prf_size):
+                if result in (0, 1):
+                    yield result
+                else:
+                    break
+            metls_finished = result
+        else:
+            for result in self._getMsg(ContentType.handshake,
+                                       HandshakeType.finished,
+                                       prf_size):
+                if result in (0, 1):
+                    yield result
+                else:
+                    break
+            finished = result
 
         server_finish_hs = self._handshake_hash.copy()
 
-        assert isinstance(finished, Finished)
+        if self.enable_metls:
+            assert isinstance(metls_finished, metlsFinished)
+        else:
+            assert isinstance(finished, Finished)
 
         finished_key = HKDF_expand_label(sr_handshake_traffic_secret,
                                          b"finished", b'', prf_size, prfName)
         verify_data = secureHMAC(finished_key, transcript_hash, prfName)
 
-        if finished.verify_data != verify_data:
-            raise TLSDecryptionFailed("Finished value is not valid")
+        if self.enable_metls:
+            if metls_finished.verify_data != verify_data:
+                raise TLSDecryptionFailed("metls finished value is not valid")
+        else:
+            if finished.verify_data != verify_data:
+                raise TLSDecryptionFailed("Finished value is not valid")
 
         # now send client set of messages
         self._changeWriteState()
@@ -1267,6 +1283,8 @@ class TLSConnection(TLSRecordLayer):
         # Finished
         self._changeReadState()
 
+        # derive symmetric keys for middleboxes
+        
         cl_finished_key = HKDF_expand_label(cl_handshake_traffic_secret,
                                             b"finished", b'',
                                             prf_size, prfName)
@@ -1275,8 +1293,12 @@ class TLSConnection(TLSRecordLayer):
             self._handshake_hash.digest(prfName),
             prfName)
 
-        cl_finished = Finished(self.version, prf_size)
-        cl_finished.create(cl_verify_data)
+        # cl_finished = Finished(self.version, prf_size)
+        # cl_finished.create(cl_verify_data)
+        if self.enable_metls:
+            cl_finished = metlsFinished(self.version, prf_size).create(self.c_to_s_mb_list, self.s_to_c_mb_list, cl_verify_data)
+        else:
+            cl_finished = Finished(self.version, prf_size).create(cl_verify_data)
 
         if not self._ccs_sent:
             ccs = ChangeCipherSpec().create()
@@ -2381,7 +2403,7 @@ class TLSConnection(TLSRecordLayer):
                                  prf_name)
 
         if settings.enable_metls:
-            finished = metlsFinished(settings.c_to_s_mb_list, settings.s_to_c_mb_list, verify_data)
+            finished = metlsFinished(self.version, prf_size).create(settings.c_to_s_mb_list, settings.s_to_c_mb_list, verify_data)
         else:
             finished = Finished(self.version, prf_size).create(verify_data)
 

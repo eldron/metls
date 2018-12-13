@@ -178,6 +178,10 @@ class TLSRecordLayer(object):
         # we sent
         self.heartbeat_response_callback = None
 
+        self.enable_metls = True # modified after receiving ServerHello
+        self.c_to_s_mb_list = [] # modified during handshaking
+        self.s_to_c_mb_list = [] # modified during handshaking
+
     @property
     def _client(self):
         """Boolean stating if the endpoint acts as a client"""
@@ -882,6 +886,8 @@ class TLSRecordLayer(object):
                                             self.version).parse(p)
                 elif subType == HandshakeType.finished:
                     yield Finished(self.version, constructorType).parse(p)
+                elif subType == HandshakeType.metls_finished:
+                    yield metlsFinished(self.version, constructorType).parse(p)
                 elif subType == HandshakeType.next_protocol:
                     yield NextProtocol().parse(p)
                 elif subType == HandshakeType.encrypted_extensions:
