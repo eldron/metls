@@ -1809,6 +1809,31 @@ class NextProtocol(HandshakeMsg):
         w.addVarSeq(bytearray(paddingLen), 1, 1)
         return self.postWrite(w)
 
+class metlsFinished(HandshakeMsg):
+    def __init__(self, version, hash_length=None):
+        HandshakeMsg.__init__(self, handshakeType.metls_finished)
+        self.version = version
+        self.verify_data = bytearray(0)
+        self.hash_length = hash_length
+        self.c_to_s_ro_mb_list = []
+        self.c_to_s_rw_mb_list = []
+        self.s_to_c_ro_mb_list = []
+        self.s_to_c_rw_mb_list = []
+
+    def create(self, c_to_s_ro_mb_list, c_to_s_rw_mb_list, s_to_c_ro_mb_list, s_to_c_rw_mb_list, verify_data):
+        self.verify_data = verify_data
+        self.c_to_s_ro_mb_list = c_to_s_ro_mb_list
+        self.c_to_s_rw_mb_list = c_to_s_rw_mb_list
+        self.s_to_c_ro_mb_list = s_to_c_ro_mb_list
+        self.s_to_c_rw_mb_list = s_to_c_rw_mb_list
+        return self
+
+    def parse(self, p):
+        # construct metlsFinished from parser
+
+    def write(self):
+        # convert metlsFinished to byte array
+
 
 class Finished(HandshakeMsg):
     def __init__(self, version, hash_length=None):

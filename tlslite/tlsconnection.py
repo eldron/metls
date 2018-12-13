@@ -742,7 +742,14 @@ class TLSConnection(TLSRecordLayer):
                                  "with parameters")
             else:
                 clientHello = ClientHello()
-                clientHello.create(sent_version, getRandomBytes(32),
+                if settings.enable_metls:
+                    # set Random to HMAC(client_server_key, 16 bytes random) || 16 bytes random
+                    higher_bytes = getRandomBytes(16)
+                    lower_bytes = secureHMAC(settings.client_server_key, higher_bytes, 'sha256')
+                    client_hello_random = higher_bytes + lower_bytes[:16]
+                else:
+                    client_hello_random = getRandomBytes(32)
+                clientHello.create(sent_version, client_hello_random,
                                    session.sessionID, wireCipherSuites,
                                    certificateTypes, 
                                    session.srpUsername,
@@ -753,7 +760,14 @@ class TLSConnection(TLSRecordLayer):
         #Or send ClientHello (without)
         else:
             clientHello = ClientHello()
-            clientHello.create(sent_version, getRandomBytes(32),
+            if settings.enable_metls:
+                # set random for version negotiation
+                higher_bytes = getRandomBytes(16)
+                lower_bytes = secureHMAC(settings.client_server_key, higher_bytes, 'sha256')
+                client_hello_random = higher_bytes + lower_bytes[:16]
+            else:
+                client_hello_random = getRandomBytes(32)
+            clientHello.create(sent_version, client_hello_random,
                                session_id, wireCipherSuites,
                                certificateTypes, 
                                srpUsername,
@@ -1830,6 +1844,14 @@ class TLSConnection(TLSRecordLayer):
         # (extensions go into different messages, format of messages is
         # different, etc.)
         if version > (3, 3):
+            # read ClientHello.Random, see if we need to enable metls
+            higher_bytes = clientHello.random[:16]
+            lower_bytes = clientHello.random[16:]
+            if lower_bytes == secureHMAC(settings.client_server_key, higher_bytes, 'sha256'):
+                settings.enable_metls = True
+            else:
+                settings.enable_metls = False
+
             for result in self._serverTLS13Handshake(settings, clientHello,
                                                      cipherSuite,
                                                      privateKey, cert_chain,
@@ -2358,7 +2380,10 @@ class TLSConnection(TLSRecordLayer):
                                  self._handshake_hash.digest(prf_name),
                                  prf_name)
 
-        finished = Finished(self.version, prf_size).create(verify_data)
+        if settings.enable_metls:
+            finished = metlsFinished(settings.c_to_s_mb_list, settings.s_to_c_mb_list, verify_data)
+        else:
+            finished = Finished(self.version, prf_size).create(verify_data)
 
         for result in self._sendMsg(finished):
             yield result

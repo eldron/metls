@@ -263,13 +263,13 @@ class HandshakeSettings(object):
         self.enable_metls = True
         self.metls_mode = 'cooperative' # 'standalone ' or 'cooperative'
         # the symmetric key derived from IBE, used for version negotiation
-        self.metls_client_server_key = bytearray(32) 
+        self.client_server_key = bytearray(32) 
         # client to server path middlebox id list
         # each contains a tuple (id, symmetric key), both of type bytearray
         # id is of length 64 bytes, symmetric key is of length 32 bytes (use aes256)
-        self.c_to_s_mb_id_list = []
+        self.c_to_s_mb_list = []
         # server to client path middlebox id list
-        self.s_to_c_mb_id_list = []
+        self.s_to_c_mb_list = []
         
     @staticmethod
     def _sanityCheckKeySizes(other):

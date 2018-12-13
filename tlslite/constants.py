@@ -108,6 +108,8 @@ class SSL2ErrorDescription(TLSEnum):
 class HandshakeType(TLSEnum):
     """Message types in TLS Handshake protocol"""
 
+    metls_finished = 68
+    
     hello_request = 0
     client_hello = 1
     server_hello = 2
