@@ -179,6 +179,7 @@ class TLSRecordLayer(object):
         self.heartbeat_response_callback = None
 
         self.enable_metls = True # modified after receiving ServerHello
+        # each contains a dictionary {'middlebox_id':, 'middlebox_permission':, 'middlebox_tag_key':}
         self.c_to_s_mb_list = [] # modified during handshaking
         self.s_to_c_mb_list = [] # modified during handshaking
 

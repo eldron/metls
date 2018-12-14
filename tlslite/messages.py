@@ -1815,10 +1815,12 @@ class metlsFinished(HandshakeMsg):
         self.version = version
         self.verify_data = bytearray(0)
         self.hash_length = hash_length
-        # each list contains a triple (id, access permission, symmetric key)
-        # id: bytearray, 64 bytes
-        # access permission: byte 0 for read only, 1 for read and write
-        # symmetric key: derived from ibe, 32 bytes long
+        # each list contains a dictionary
+        # {'middlebox_id', 'middlebox_permission', 'middlebox_tag_key', 'ibe_symmetric_key'}
+        # middlebox id: bytearray, 64 bytes
+        # middlebox permission: byte 0 for read only, 1 for read and write
+        # middlebox tag key: derived during handshaking, 32 bytes long
+        # ibe symmetric key: derived from ibe, 32 bytes long
         self.c_to_s_mb_list = []
         self.s_to_c_mb_list = []
 
@@ -1843,13 +1845,15 @@ class metlsFinished(HandshakeMsg):
                 for _ in range(list_length):
                     middlebox_id = p.getFixBytes(64)
                     middlebox_permission = p.get(1)
-                    self.c_to_s_mb_list.append((middlebox_id, middlebox_permission))
+                    item = {'middlebox_id':middlebox_id, 'middlebox_permission':middlebox_permission}
+                    self.c_to_s_mb_list.append(item)
             else:
                 # read server to client middleboxes
                 for _ in range(list_length):
                     middlebox_id = p.getFixBytes(64)
                     middlebox_permission = p.get(1)
-                    self.s_to_c_mb_list.append((middlebox_id, middlebox_permission))
+                    item = {'middlebox_id':middlebox_id, 'middlebox_permission':middlebox_permission}
+                    self.s_to_c_mb_list.append(item)
         p.stopLengthCheck()
         return self
         
@@ -1860,13 +1864,13 @@ class metlsFinished(HandshakeMsg):
         w.add(0, 1) # client to server middlebox list 
         w.add(len(self.c_to_s_mb_list), 2)
         for entry in self.c_to_s_mb_list:
-            w.bytes += entry[0] # id
-            w.bytes += entry[1] # access permission
+            w.bytes += entry['middlebox_id'] # id
+            w.bytes += entry['middlebox_permission'] # access permission
         w.add(1, 1) # server to client middlebox list
         w.add(len(self.s_to_c_mb_list), 2)
         for entry in self.s_to_c_mb_list:
-            w.bytes += entry[0]
-            w.bytes += entry[1]
+            w.bytes += entry['middlebox_id']
+            w.bytes += entry['middlebox_permission']
         return self.postWrite(w) # add msg_type and length
 
 

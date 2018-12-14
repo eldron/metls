@@ -1222,14 +1222,14 @@ class TLSConnection(TLSRecordLayer):
 
         transcript_hash = self._handshake_hash.digest(prfName)
 
-        if self.enable_metls:
+        if settings.enable_metls:
             # get metlsFinished
-            for result in self._getMsg(ContentType.handshake, HandshakeType.metls_finished, prf_size):
+            for result in self._getMsg(ContentType.handshake, (HandshakeType.metls_finished, HandshakeType.finished), prf_size):
                 if result in (0, 1):
                     yield result
                 else:
                     break
-            metls_finished = result
+            finished = result
         else:
             for result in self._getMsg(ContentType.handshake,
                                        HandshakeType.finished,
@@ -1242,8 +1242,16 @@ class TLSConnection(TLSRecordLayer):
 
         server_finish_hs = self._handshake_hash.copy()
 
-        if self.enable_metls:
-            assert isinstance(metls_finished, metlsFinished)
+        if settings.enable_metls:
+            self.enable_metls = isinstance(finished, metlsFinished)
+            if not self.enable_metls:
+                assert(isinstance(finished, Finished))
+            else:
+                # modify middlebox list according to settings and finished
+                # naive implementation, infact we need to consider duplicate middleboxes
+                self.c_to_s_mb_list = settings.c_to_s_mb_list + finished.c_to_s_mb_list
+                self.s_to_c_mb_list = settings.s_to_c_mb_list + finished.s_to_c_mb_list
+
         else:
             assert isinstance(finished, Finished)
 
@@ -1251,12 +1259,9 @@ class TLSConnection(TLSRecordLayer):
                                          b"finished", b'', prf_size, prfName)
         verify_data = secureHMAC(finished_key, transcript_hash, prfName)
 
-        if self.enable_metls:
-            if metls_finished.verify_data != verify_data:
-                raise TLSDecryptionFailed("metls finished value is not valid")
-        else:
-            if finished.verify_data != verify_data:
-                raise TLSDecryptionFailed("Finished value is not valid")
+        
+        if finished.verify_data != verify_data:
+            raise TLSDecryptionFailed("Finished value is not valid")
 
         # now send client set of messages
         self._changeWriteState()
@@ -1283,8 +1288,25 @@ class TLSConnection(TLSRecordLayer):
         # Finished
         self._changeReadState()
 
-        # derive symmetric keys for middleboxes
-        
+        if self.enable_metls:
+            # derive symmetric tag keys for middleboxes
+            # derive from master secret
+            for entry in self.c_to_s_mb_list:
+                middlebox_id = entry['middlebox_id']
+                middlebox_tag_key = derive_secret(secret, middlebox_id, server_finish_hs, 'sha256')
+                entry['middlebox_tag_key'] = middlebox_tag_key
+            for entry in self.s_to_c_mb_list:
+                middlebox_id = entry['middlebox_id']
+                middlebox_tag_key = derive_secret(secret, middlebox_id, server_finish_hs, 'sha256')
+                entry['middlebox_tag_key'] = middlebox_tag_key
+
+            # derive mac key for client and server
+            # fragment of TLSPlaintext contains:
+            # app_data + HMAC(endpoint_mac_key, app_data) + tags
+            # tags are appended by middleboxes
+            self.endpoint_mac_key = derive_secret(secret, b'endpoint_mac_key', server_finish_hs, 'sha256')
+
+
         cl_finished_key = HKDF_expand_label(cl_handshake_traffic_secret,
                                             b"finished", b'',
                                             prf_size, prfName)
@@ -2412,6 +2434,9 @@ class TLSConnection(TLSRecordLayer):
 
         self._changeReadState()
 
+        # for deriving middlebox tag keys and endpoint mac key
+        tmp_hash_state = self._handshake_hash.copy()
+
         # Master secret
         secret = derive_secret(secret, bytearray(b'derived'), None, prf_name)
         secret = secureHMAC(secret, bytearray(prf_size), prf_name)
@@ -2446,21 +2471,57 @@ class TLSConnection(TLSRecordLayer):
         cl_verify_data = secureHMAC(cl_finished_key,
                                     self._handshake_hash.digest(prf_name),
                                     prf_name)
-        for result in self._getMsg(ContentType.handshake,
-                                   HandshakeType.finished,
-                                   prf_size):
-            if result in (0, 1):
-                yield result
-            else:
-                break
-        cl_finished = result
-        assert isinstance(cl_finished, Finished)
+
+        if self.enable_metls:
+            for result in self._getMsg(ContentType.handshake, HandshakeType.metls_finished, prf_size):
+                if result in (0, 1):
+                    yield result
+                else:
+                    break
+            cl_finished = result
+            assert isinstance(cl_finished, metlsFinished)
+        else:
+            for result in self._getMsg(ContentType.handshake,
+                                       HandshakeType.finished,
+                                       prf_size):
+                if result in (0, 1):
+                    yield result
+                else:
+                    break
+            cl_finished = result
+            assert isinstance(cl_finished, Finished)
+
         if cl_finished.verify_data != cl_verify_data:
+            print 'server: Finished value is not valid'
             for result in self._sendError(
                     AlertDescription.decrypt_error,
                     "Finished value is not valid"):
                 yield result
 
+        # modify client to server path middleboxes list and server to client path
+        # middleboxes list according to client Finished msg
+        # derive middlebox tag keys 
+        # derive endpoint mac key
+        if self.enable_metls:
+            self.c_to_s_mb_list = []
+            self.s_to_c_mb_list = []
+            for entry in cl_finished.c_to_s_mb_list:
+                middlebox_id = entry['middlebox_id']
+                middlebox_permission = entry['middlebox_permission']
+                middlebox_tag_key = derive_secret(secret, middlebox_id, tmp_hash_state, 'sha256')
+                self.c_to_s_mb_list.append({'middlebox_id':middlebox_id, 'middlebox_permission':middlebox_permission, 'middlebox_tag_key':middlebox_tag_key})
+            for entry in cl_finished.s_to_c_mb_list:
+                middlebox_id = entry['middlebox_id']
+                middlebox_permission = entry['middlebox_permission']
+                middlebox_tag_key = derive_secret(secret, middlebox_id, tmp_hash_state, 'sha256')
+                self.c_to_s_mb_list.append({'middlebox_id':middlebox_id, 'middlebox_permission':middlebox_permission, 'middlebox_tag_key':middlebox_tag_key})
+
+            self.endpoint_mac_key = derive_secret(secret, 'endpoint_mac_key', tmp_hash_state, 'sha256')
+
+
+        # we need to modify getMsg function, when sending or receive finished msg,
+        # update hash only with verify_data
+        # not including middlebox lists
         resumption_master_secret = derive_secret(secret,
                                                  bytearray(b'res master'),
                                                  self._handshake_hash,
