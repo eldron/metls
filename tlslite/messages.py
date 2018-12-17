@@ -2170,7 +2170,30 @@ class CertificateStatus(HandshakeMsg):
         writer.bytes += self.ocsp
         return self.postWrite(writer)
 
+class metlsApplicationData(object):
+    def __init__(self):
+        self.contentType = ContentType.application_data
+        self.app_data = None
+        self.endpoint_mac = None
+        self.endpoint_random = None
+        self.endpoint_tag = None
 
+    def create(self, app_data, endpoint_mac, endpoint_random, endpoint_tag):
+        self.app_data = app_data
+        self.endpoint_mac = endpoint_mac
+        self.endpoint_random = endpoint_random
+        self.endpoint_tag = endpoint_tag
+
+    def parse(self, p):
+        length = len(p.bytes)
+        self.app_data = p.bytes[:length - 96]
+        self.endpoint_mac = p.bytes[length - 96:length - 64]
+        self.endpoint_random = p.bytes[length - 64:length - 32]
+        self.endpoint_tag = p.bytes[length - 32:]
+
+    def write(self):
+        return self.app_data + self.endpoint_mac + self.endpoint_random + self.endpoint_tag
+        
 class ApplicationData(object):
     def __init__(self):
         self.contentType = ContentType.application_data

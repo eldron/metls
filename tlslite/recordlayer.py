@@ -303,6 +303,16 @@ class RecordLayer(object):
         self.max_early_data = 0
         self._early_data_processed = 0
 
+        # the values are identical to those in class TLSRecordLayer
+        self.enable_metls = True # modified after receiving ServerHello
+        # each contains a dictionary {'middlebox_id':, 'middlebox_permission':, 'middlebox_tag_key':}
+        self.c_to_s_mb_list = [] # modified during handshaking
+        self.s_to_c_mb_list = [] # modified during handshaking
+        # the symmetric key used by endpoints for mac generation
+        self.endpoint_mac_key = None
+        # the symmetric key used by endpoints for path verification
+        self.endpoint_tag_key = None
+
     @property
     def early_data_ok(self):
         """

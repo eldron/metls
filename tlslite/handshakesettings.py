@@ -271,6 +271,8 @@ class HandshakeSettings(object):
         self.c_to_s_mb_list = []
         # server to client path middlebox id list
         self.s_to_c_mb_list = []
+
+        self.print_debug_info = True
         
     @staticmethod
     def _sanityCheckKeySizes(other):

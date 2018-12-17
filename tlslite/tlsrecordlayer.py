@@ -182,6 +182,10 @@ class TLSRecordLayer(object):
         # each contains a dictionary {'middlebox_id':, 'middlebox_permission':, 'middlebox_tag_key':}
         self.c_to_s_mb_list = [] # modified during handshaking
         self.s_to_c_mb_list = [] # modified during handshaking
+        # the symmetric key used by endpoints for mac generation
+        self.endpoint_mac_key = None
+        # the symmetric key used by endpoints for path verification
+        self.endpoint_tag_key = None
 
     @property
     def _client(self):
@@ -287,7 +291,23 @@ class TLSRecordLayer(object):
                         self.tickets.append(result)
                         continue
                     applicationData = result
-                    self._readBuffer += applicationData.write()
+
+                    if not self.enable_metls:
+                        self._readBuffer += applicationData.write()
+                    else:
+                        # check mac
+                        tmpmac = secureHMAC(self.endpoint_mac_key, applicationData.app_data, 'sha256')
+                        if tmpmac != applicationData.endpoint_mac:
+                            print 'mac value of application data is not correct'
+                            self._shutdown(False)
+                            raise
+                        # path verifycation
+                        tmptag = secureHMAC(self.endpoint_tag_key, applicationData.endpoint_random, 'sha256')
+                        if tmptag != applicationData.endpoint_tag:
+                            print 'path verification failed'
+                            self._shutdown(False)
+                            raise
+                        self._readBuffer += application_data.app_data
                 except TLSRemoteAlert as alert:
                     if alert.description != AlertDescription.close_notify:
                         raise
@@ -330,8 +350,18 @@ class TLSRecordLayer(object):
 
         :raises socket.error: If a socket error occurs.
         """
-        for result in self.writeAsync(s):
-            pass
+        if self.enable_metls:
+            # we need to fragment s before creating metls application data record
+            while len(s) > 16000:
+                tmps = s[:16000]
+                s = s[16000:]
+                for result in self.writeAsync(tmps):
+                    pass
+            for result in self.writeAsync(s):
+                pass
+        else:
+            for result in self.writeAsync(s):
+                pass
 
     def writeAsync(self, s):
         """Start a write operation on the TLS connection.
@@ -348,7 +378,14 @@ class TLSRecordLayer(object):
             if self.closed:
                 raise TLSClosedConnectionError("attempt to write to closed connection")
 
-            applicationData = ApplicationData().create(bytearray(s))
+            if self.enable_metls:
+                # create metls application data record
+                endpoint_mac = secureHMAC(self.endpoint_mac_key, bytearray(s), 'sha256')
+                endpoint_random = getRandomBytes(32)
+                endpoint_tag = secureHMAC(self.endpoint_tag_key, endpoint_random, 'sha256')
+                applicationData = metlsApplicationData().create(bytearray(s), endpoint_mac, endpoint_random, endpoint_tag)
+            else:
+                applicationData = ApplicationData().create(bytearray(s))
             for result in self._sendMsg(applicationData, \
                                         randomizeFirstBlock=True):
                 yield result
@@ -629,7 +666,13 @@ class TLSRecordLayer(object):
         contentType = msg.contentType
         #Update handshake hashes
         if contentType == ContentType.handshake:
-            self._handshake_hash.update(buf)
+            if not self.enable_metls:
+                self._handshake_hash.update(buf)
+            else:
+                if msg.handshakeType == HandshakeType.metls_finished:
+                    self._handshake_hash.update(msg.verify_data)
+                else:
+                    self._handshake_hash.update(buf)
 
         #Fragment big messages
         while len(buf) > self.recordSize:
@@ -832,7 +875,16 @@ class TLSRecordLayer(object):
             elif recordHeader.type == ContentType.alert:
                 yield Alert().parse(p)
             elif recordHeader.type == ContentType.application_data:
-                yield ApplicationData().parse(p)
+                if self.enable_metls:
+                    # check if this message is for session key distribution
+                    # if so, ignore the msg
+                    tmptag = secureHMAC(self.endpoint_mac_key, b'session key distribution', 'sha256')
+                    if tmptag == p.bytes[:32]:
+                        yield 0
+                    else:
+                        yield metlsApplicationData().parse(p)
+                else:
+                    yield ApplicationData().parse(p)
             elif recordHeader.type == ContentType.handshake:
                 #Convert secondaryType to tuple, if it isn't already
                 if not isinstance(secondaryType, tuple):
@@ -864,7 +916,13 @@ class TLSRecordLayer(object):
                             yield result
 
                 #Update handshake hashes
-                self._handshake_hash.update(p.bytes)
+                if self.enable_metls:
+                    if subType == HandshakeType.metls_finished:
+                        self._handshake_hash.update(p.bytes[:constructorType])
+                    else:
+                        self._handshake_hash.update(p.bytes)
+                else:
+                    self._handshake_hash.update(p.bytes)
 
                 #Parse based on handshake type
                 if subType == HandshakeType.client_hello:

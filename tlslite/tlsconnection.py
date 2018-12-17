@@ -1295,16 +1295,32 @@ class TLSConnection(TLSRecordLayer):
                 middlebox_id = entry['middlebox_id']
                 middlebox_tag_key = derive_secret(secret, middlebox_id, server_finish_hs, 'sha256')
                 entry['middlebox_tag_key'] = middlebox_tag_key
+                if settings.print_debug_info:
+                    print 'middlebox_id is'
+                    print ''.join(format(x, '02x') for x in middlebox_id)
+                    print 'middlebox_tag_key is'
+                    print ''.join(format(x, '02x') for x in middlebox_tag_key)
             for entry in self.s_to_c_mb_list:
                 middlebox_id = entry['middlebox_id']
                 middlebox_tag_key = derive_secret(secret, middlebox_id, server_finish_hs, 'sha256')
                 entry['middlebox_tag_key'] = middlebox_tag_key
+                if settings.print_debug_info:
+                    print 'middlebox_id is'
+                    print ''.join(format(x, '02x') for x in middlebox_id)
+                    print 'middlebox_tag_key is'
+                    print ''.join(format(x, '02x') for x in middlebox_tag_key)
 
             # derive mac key for client and server
             # fragment of TLSPlaintext contains:
             # app_data + HMAC(endpoint_mac_key, app_data) + tags
             # tags are appended by middleboxes
             self.endpoint_mac_key = derive_secret(secret, b'endpoint_mac_key', server_finish_hs, 'sha256')
+            self.endpoint_tag_key = derive_secret(secret, b'endpoint_tag_key', server_finish_hs, 'sha256')
+            if settings.print_debug_info:
+                print 'endpoint_mac_key is'
+                print ''.join(format(x, '02x') for x in self.endpoint_mac_key)
+                print 'endpoint_tag_key is'
+                print ''.join(format(x, '02x') for x in self.endpoint_tag_key)
 
 
         cl_finished_key = HKDF_expand_label(cl_handshake_traffic_secret,
@@ -2510,13 +2526,30 @@ class TLSConnection(TLSRecordLayer):
                 middlebox_permission = entry['middlebox_permission']
                 middlebox_tag_key = derive_secret(secret, middlebox_id, tmp_hash_state, 'sha256')
                 self.c_to_s_mb_list.append({'middlebox_id':middlebox_id, 'middlebox_permission':middlebox_permission, 'middlebox_tag_key':middlebox_tag_key})
+                if settings.print_debug_info:
+                    print 'middlebox_id is'
+                    print ''.join(format(x, '02x') for x in middlebox_id)
+                    print 'middlebox_tag_key is'
+                    print ''.join(format(x, '02x') for x in middlebox_tag_key)
             for entry in cl_finished.s_to_c_mb_list:
                 middlebox_id = entry['middlebox_id']
                 middlebox_permission = entry['middlebox_permission']
                 middlebox_tag_key = derive_secret(secret, middlebox_id, tmp_hash_state, 'sha256')
                 self.c_to_s_mb_list.append({'middlebox_id':middlebox_id, 'middlebox_permission':middlebox_permission, 'middlebox_tag_key':middlebox_tag_key})
+                if settings.print_debug_info:
+                    print 'middlebox_id is'
+                    print ''.join(format(x, '02x') for x in middlebox_id)
+                    print 'middlebox_tag_key is'
+                    print ''.join(format(x, '02x') for x in middlebox_tag_key)
 
-            self.endpoint_mac_key = derive_secret(secret, 'endpoint_mac_key', tmp_hash_state, 'sha256')
+            self.endpoint_mac_key = derive_secret(secret, b'endpoint_mac_key', tmp_hash_state, 'sha256')
+            self.endpoint_tag_key = derive_secret(secret, b'endpoint_tag_key', tmp_hash_state, 'sha256')
+            if settings.print_debug_info:
+                print 'endpoint_mac_key is'
+                print ''.join(format(x, '02x') for x in self.endpoint_mac_key)
+                print 'endpoint_tag_key is'
+                print ''.join(format(x, '02x') for x in self.endpoint_tag_key)
+
 
 
         # we need to modify getMsg function, when sending or receive finished msg,
