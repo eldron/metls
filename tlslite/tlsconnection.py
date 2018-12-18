@@ -1268,13 +1268,33 @@ class TLSConnection(TLSRecordLayer):
 
         if self.enable_metls:
             assert isinstance(finished, metlsFinished)
-            if settings.print_debug_info:
-                print 'client received metls finished'
-                finished.print_metls_finished()
             # modify middlebox list according to settings and finished
             # naive implementation, infact we need to consider duplicate middleboxes
             self.c_to_s_mb_list = settings.c_to_s_mb_list + finished.c_to_s_mb_list
             self.s_to_c_mb_list = settings.s_to_c_mb_list + finished.s_to_c_mb_list
+            if settings.print_debug_info:
+                print 'client received metls finished'
+                finished.print_metls_finished()
+
+                print settings
+                print 'settings c_to_s_mb_list length is'
+                print len(settings.c_to_s_mb_list)
+                print 'settings s_to_c_mb_list length is'
+                print len(settings.s_to_c_mb_list)
+
+                print 'after negotiation'
+                print 'client to server middleboxes'
+                for entry in self.c_to_s_mb_list:
+                    print 'middlebox_id'
+                    print ''.join(format(x, '02x') for x in entry['middlebox_id'])
+                    print 'middlebox_permission'
+                    print ''.join(format(x, '02x') for x in entry['middlebox_permission'])
+                print 'server to client middleboxes'
+                for entry in self.s_to_c_mb_list:
+                    print 'middlebox_id'
+                    print ''.join(format(x, '02x') for x in entry['middlebox_id'])
+                    print 'middlebox_permission'
+                    print ''.join(format(x, '02x') for x in entry['middlebox_permission'])
         else:
             assert isinstance(finished, Finished)
             if settings.print_debug_info:
@@ -1330,6 +1350,8 @@ class TLSConnection(TLSRecordLayer):
                     print ''.join(format(x, '02x') for x in middlebox_id)
                     print 'middlebox_tag_key is'
                     print ''.join(format(x, '02x') for x in middlebox_tag_key)
+                    print 'middlebox_tag_key length is'
+                    print len(middlebox_tag_key)
             for entry in self.s_to_c_mb_list:
                 middlebox_id = entry['middlebox_id']
                 middlebox_tag_key = derive_secret(secret, middlebox_id, server_finish_hs, 'sha256')
@@ -1384,6 +1406,20 @@ class TLSConnection(TLSRecordLayer):
         resumption_master_secret = derive_secret(secret,
                                                  bytearray(b'res master'),
                                                  self._handshake_hash, prfName)
+
+        if settings.print_debug_info:
+            print 'cl_handshake_traffic_secret is'
+            print ''.join(format(x, '02x') for x in cl_handshake_traffic_secret)
+            print 'sr_handshake_traffic_secret is'
+            print ''.join(format(x, '02x') for x in sr_handshake_traffic_secret)
+            print 'cl_app_traffic is'
+            print ''.join(format(x, '02x') for x in cl_app_traffic)
+            print 'sr_app_traffic is'
+            print ''.join(format(x, '02x') for x in sr_app_traffic)
+            print 'exporter_master_secret is'
+            print ''.join(format(x, '02x') for x in exporter_master_secret)
+            print 'resumption_master_secret is'
+            print ''.join(format(x, '02x') for x in resumption_master_secret)
 
         self.session = Session()
         self.extendedMasterSecret = True
@@ -2490,6 +2526,7 @@ class TLSConnection(TLSRecordLayer):
         if self.enable_metls:
             finished = metlsFinished(self.version, prf_size).create(settings.c_to_s_mb_list, settings.s_to_c_mb_list, verify_data)
             if settings.print_debug_info:
+                finished.print_metls_finished()
                 print 'server sent metls_finished'
         else:
             finished = Finished(self.version, prf_size).create(verify_data)
@@ -2618,6 +2655,20 @@ class TLSConnection(TLSRecordLayer):
                                                  bytearray(b'res master'),
                                                  self._handshake_hash,
                                                  prf_name)
+
+        if settings.print_debug_info:
+            print 'cl_handshake_traffic_secret is'
+            print ''.join(format(x, '02x') for x in cl_handshake_traffic_secret)
+            print 'sr_handshake_traffic_secret is'
+            print ''.join(format(x, '02x') for x in sr_handshake_traffic_secret)
+            print 'cl_app_traffic is'
+            print ''.join(format(x, '02x') for x in cl_app_traffic)
+            print 'sr_app_traffic is'
+            print ''.join(format(x, '02x') for x in sr_app_traffic)
+            print 'exporter_master_secret is'
+            print ''.join(format(x, '02x') for x in exporter_master_secret)
+            print 'resumption_master_secret is'
+            print ''.join(format(x, '02x') for x in resumption_master_secret)
 
         self.session = Session()
         self.extendedMasterSecret = True

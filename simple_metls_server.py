@@ -25,8 +25,18 @@ if __name__ == '__main__':
 		settings.enable_metls = True
 		settings.client_server_key = bytearray(32)
 		settings.print_debug_info = True
-		settings.c_to_s_mb_list = []
-		settings.s_to_c_mb_list = []
+		id3 = bytearray(64)
+		id3[63] = 3
+		id4 = bytearray(64)
+		id4[63] = 4
+		permission3 = bytearray(1)
+		permission3[0] = 1
+		permission4 = bytearray(1)
+		permission4[0] = 1
+		mb3 = {'middlebox_id':id3, 'middlebox_permission':permission3}
+		mb4 = {'middlebox_id':id4, 'middlebox_permission':permission4}
+		settings.c_to_s_mb_list = [mb3, mb4]
+		settings.s_to_c_mb_list = [mb4, mb3]
 
 		ip = sys.argv[1]
 		port = int(sys.argv[2])

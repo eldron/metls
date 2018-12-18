@@ -26,7 +26,7 @@ if __name__ == '__main__':
         settings.eccCurves = list([curve_name])
         settings.defaultCurve = curve_name
         settings.keyShares = [curve_name]
-        
+
         settings.enable_metls = True
         settings.print_debug_info = True
         settings.client_server_key = bytearray(32)
@@ -42,5 +42,9 @@ if __name__ == '__main__':
         mb2 = {'middlebox_id':id2, 'middlebox_permission':permission2}
         settings.c_to_s_mb_list = [mb1, mb2]
         settings.s_to_c_mb_list = [mb2, mb1]
+
+        print settings
+        print len(settings.c_to_s_mb_list)
+        print len(settings.s_to_c_mb_list)
 
         connection.handshakeClientCert(settings=settings)

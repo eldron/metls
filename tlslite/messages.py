@@ -1844,14 +1844,14 @@ class metlsFinished(HandshakeMsg):
                 # read client to server middleboxes
                 for _ in range(list_length):
                     middlebox_id = p.getFixBytes(64)
-                    middlebox_permission = p.get(1)
+                    middlebox_permission = p.getFixBytes(1)
                     item = {'middlebox_id':middlebox_id, 'middlebox_permission':middlebox_permission}
                     self.c_to_s_mb_list.append(item)
             else:
                 # read server to client middleboxes
                 for _ in range(list_length):
                     middlebox_id = p.getFixBytes(64)
-                    middlebox_permission = p.get(1)
+                    middlebox_permission = p.getFixBytes(1)
                     item = {'middlebox_id':middlebox_id, 'middlebox_permission':middlebox_permission}
                     self.s_to_c_mb_list.append(item)
         p.stopLengthCheck()
@@ -1873,12 +1873,21 @@ class metlsFinished(HandshakeMsg):
             w.bytes += entry['middlebox_permission']
         return self.postWrite(w) # add msg_type and length
 
-    def print_metls_finished():
+    def print_metls_finished(self):
         # for debug
         print 'client to server middleboxes'
         for entry in self.c_to_s_mb_list:
             print 'middlebox_id'
-            
+            print ''.join(format(x, '02x') for x in entry['middlebox_id'])
+            print 'middlebox_permission'
+            print ''.join(format(x, '02x') for x in entry['middlebox_permission'])
+        print 'server to client middleboxes'
+        for entry in self.s_to_c_mb_list:
+            print 'middlebox_id'
+            print ''.join(format(x, '02x') for x in entry['middlebox_id'])
+            print 'middlebox_permission'
+            print ''.join(format(x, '02x') for x in entry['middlebox_permission'])
+
 
 class Finished(HandshakeMsg):
     def __init__(self, version, hash_length=None):

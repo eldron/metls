@@ -581,6 +581,13 @@ class HandshakeSettings(object):
         self._sanity_check_implementations(other)
         self._sanity_check_ciphers(other)
 
+        other.enable_metls = self.enable_metls
+        other.client_server_key = self.client_server_key
+        other.print_debug_info = self.print_debug_info
+        other.c_to_s_mb_list = self.c_to_s_mb_list
+        other.s_to_c_mb_list = self.s_to_c_mb_list
+        other.metls_mode = self.metls_mode
+        
         return other
 
     def getCertificateTypes(self):
