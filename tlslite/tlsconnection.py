@@ -743,12 +743,17 @@ class TLSConnection(TLSRecordLayer):
             else:
                 clientHello = ClientHello()
                 if settings.enable_metls:
-                    # set Random to HMAC(client_server_key, 16 bytes random) || 16 bytes random
-                    higher_bytes = getRandomBytes(16)
-                    lower_bytes = secureHMAC(settings.client_server_key, higher_bytes, 'sha256')
-                    client_hello_random = higher_bytes + lower_bytes[:16]
+                    # set Random to 16 bytes random || HMAC(client_server_key, 16 bytes random)
+                    lower_bytes = getRandomBytes(16)
+                    higher_bytes = secureHMAC(settings.client_server_key, lower_bytes, 'sha256')
+                    client_hello_random = lower_bytes + higher_bytes[:16]
+                    if settings.print_debug_info:
+                        print 'metls client hello random constructed'
                 else:
                     client_hello_random = getRandomBytes(32)
+                    if settings.print_debug_info:
+                        print 'legacy client hello random constructed'
+
                 clientHello.create(sent_version, client_hello_random,
                                    session.sessionID, wireCipherSuites,
                                    certificateTypes, 
@@ -762,11 +767,16 @@ class TLSConnection(TLSRecordLayer):
             clientHello = ClientHello()
             if settings.enable_metls:
                 # set random for version negotiation
-                higher_bytes = getRandomBytes(16)
-                lower_bytes = secureHMAC(settings.client_server_key, higher_bytes, 'sha256')
-                client_hello_random = higher_bytes + lower_bytes[:16]
+                lower_bytes = getRandomBytes(16)
+                tmp = secureHMAC(settings.client_server_key, lower_bytes, 'sha256')
+                client_hello_random = lower_bytes + tmp[:16]
+                if settings.print_debug_info:
+                    print 'metls client hello random constructed'
             else:
                 client_hello_random = getRandomBytes(32)
+                if settings.print_debug_info:
+                    print 'legacy client hello random constructed'
+
             clientHello.create(sent_version, client_hello_random,
                                session_id, wireCipherSuites,
                                certificateTypes, 
@@ -1091,6 +1101,20 @@ class TLSConnection(TLSRecordLayer):
     def _clientTLS13Handshake(self, settings, session, clientHello,
                               serverHello):
         """Perform TLS 1.3 handshake as a client."""
+        if settings.enable_metls:
+            lower_bytes = serverHello.random[:16]
+            higher_bytes = serverHello.random[16:]
+            tmp = secureHMAC(settings.client_server_key, lower_bytes, 'sha256')
+            tmp = tmp[:16]
+            self.enable_metls = (tmp == higher_bytes)
+        else:
+            self.enable_metls = False
+        if settings.print_debug_info:
+            if self.enable_metls:
+                print 'client enabled metls'
+            else:
+                print 'client disabled metls'
+
         prfName, prf_size = self._getPRFParams(serverHello.cipher_suite)
 
         # we have client and server hello in TLS 1.3 so we have the necessary
@@ -1222,7 +1246,7 @@ class TLSConnection(TLSRecordLayer):
 
         transcript_hash = self._handshake_hash.digest(prfName)
 
-        if settings.enable_metls:
+        if self.enable_metls:
             # get metlsFinished
             for result in self._getMsg(ContentType.handshake, (HandshakeType.metls_finished, HandshakeType.finished), prf_size):
                 if result in (0, 1):
@@ -1242,18 +1266,19 @@ class TLSConnection(TLSRecordLayer):
 
         server_finish_hs = self._handshake_hash.copy()
 
-        if settings.enable_metls:
-            self.enable_metls = isinstance(finished, metlsFinished)
-            if not self.enable_metls:
-                assert(isinstance(finished, Finished))
-            else:
-                # modify middlebox list according to settings and finished
-                # naive implementation, infact we need to consider duplicate middleboxes
-                self.c_to_s_mb_list = settings.c_to_s_mb_list + finished.c_to_s_mb_list
-                self.s_to_c_mb_list = settings.s_to_c_mb_list + finished.s_to_c_mb_list
-
+        if self.enable_metls:
+            assert isinstance(finished, metlsFinished)
+            if settings.print_debug_info:
+                print 'client received metls finished'
+                finished.print_metls_finished()
+            # modify middlebox list according to settings and finished
+            # naive implementation, infact we need to consider duplicate middleboxes
+            self.c_to_s_mb_list = settings.c_to_s_mb_list + finished.c_to_s_mb_list
+            self.s_to_c_mb_list = settings.s_to_c_mb_list + finished.s_to_c_mb_list
         else:
             assert isinstance(finished, Finished)
+            if settings.print_debug_info:
+                print 'client received legacy finished'
 
         finished_key = HKDF_expand_label(sr_handshake_traffic_secret,
                                          b"finished", b'', prf_size, prfName)
@@ -1261,7 +1286,12 @@ class TLSConnection(TLSRecordLayer):
 
         
         if finished.verify_data != verify_data:
+            if settings.print_debug_info:
+                print 'client: finished value is not valid'
             raise TLSDecryptionFailed("Finished value is not valid")
+        else:
+            if settings.print_debug_info:
+                print 'client: finished value is valid'
 
         # now send client set of messages
         self._changeWriteState()
@@ -1905,12 +1935,19 @@ class TLSConnection(TLSRecordLayer):
         # different, etc.)
         if version > (3, 3):
             # read ClientHello.Random, see if we need to enable metls
-            higher_bytes = clientHello.random[:16]
-            lower_bytes = clientHello.random[16:]
-            if lower_bytes == secureHMAC(settings.client_server_key, higher_bytes, 'sha256'):
-                settings.enable_metls = True
+            if settings.enable_metls:
+                lower_bytes = clientHello.random[:16]
+                higher_bytes = clientHello.random[16:]
+                tmp = secureHMAC(settings.client_server_key, lower_bytes, 'sha256')
+                tmp = tmp[:16]
+                self.enable_metls = (higher_bytes == tmp)     
             else:
-                settings.enable_metls = False
+                self.enable_metls = False
+            if settings.print_debug_info:
+                if self.enable_metls:
+                    print 'server enabled metls'
+                else:
+                    print 'server metls not enabled'
 
             for result in self._serverTLS13Handshake(settings, clientHello,
                                                      cipherSuite,
@@ -2325,9 +2362,19 @@ class TLSConnection(TLSRecordLayer):
                                  .create(selected_psk))
 
         serverHello = ServerHello()
+        if self.enable_metls:
+            lower_bytes = getRandomBytes(16)
+            tmp = secureHMAC(settings.client_server_key, lower_bytes, 'sha256')
+            server_hello_random = lower_bytes + tmp[:16]
+            if settings.print_debug_info:
+                print 'metls server hello random constructed'
+        else:
+            server_hello_random = getRandomBytes(32)
+            if settings.print_debug_info:
+                print 'legacy server hello random constructed'
         # in TLS1.3 the version selected is sent in extension, (3, 3) is
         # just dummy value to workaround broken middleboxes
-        serverHello.create((3, 3), getRandomBytes(32),
+        serverHello.create((3, 3), server_hello_random,
                            clientHello.session_id,
                            cipherSuite, extensions=sh_extensions)
 
@@ -2440,10 +2487,14 @@ class TLSConnection(TLSRecordLayer):
                                  self._handshake_hash.digest(prf_name),
                                  prf_name)
 
-        if settings.enable_metls:
+        if self.enable_metls:
             finished = metlsFinished(self.version, prf_size).create(settings.c_to_s_mb_list, settings.s_to_c_mb_list, verify_data)
+            if settings.print_debug_info:
+                print 'server sent metls_finished'
         else:
             finished = Finished(self.version, prf_size).create(verify_data)
+            if settings.print_debug_info:
+                print 'server sent finished'
 
         for result in self._sendMsg(finished):
             yield result
@@ -2496,6 +2547,8 @@ class TLSConnection(TLSRecordLayer):
                     break
             cl_finished = result
             assert isinstance(cl_finished, metlsFinished)
+            if settings.print_debug_info:
+                print 'server received metls finished'
         else:
             for result in self._getMsg(ContentType.handshake,
                                        HandshakeType.finished,
@@ -2506,13 +2559,19 @@ class TLSConnection(TLSRecordLayer):
                     break
             cl_finished = result
             assert isinstance(cl_finished, Finished)
+            if settings.print_debug_info:
+                print 'server received legacy finished'
 
         if cl_finished.verify_data != cl_verify_data:
-            print 'server: Finished value is not valid'
+            if settings.print_debug_info:
+                print 'server: Finished value is not valid'
             for result in self._sendError(
                     AlertDescription.decrypt_error,
                     "Finished value is not valid"):
                 yield result
+        else:
+            if settings.print_debug_info:
+                print 'server: finished value is valid'
 
         # modify client to server path middleboxes list and server to client path
         # middleboxes list according to client Finished msg

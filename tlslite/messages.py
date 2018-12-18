@@ -1811,7 +1811,7 @@ class NextProtocol(HandshakeMsg):
 
 class metlsFinished(HandshakeMsg):
     def __init__(self, version, hash_length=None):
-        HandshakeMsg.__init__(self, handshakeType.metls_finished)
+        HandshakeMsg.__init__(self, HandshakeType.metls_finished)
         self.version = version
         self.verify_data = bytearray(0)
         self.hash_length = hash_length
@@ -1873,6 +1873,12 @@ class metlsFinished(HandshakeMsg):
             w.bytes += entry['middlebox_permission']
         return self.postWrite(w) # add msg_type and length
 
+    def print_metls_finished():
+        # for debug
+        print 'client to server middleboxes'
+        for entry in self.c_to_s_mb_list:
+            print 'middlebox_id'
+            
 
 class Finished(HandshakeMsg):
     def __init__(self, version, hash_length=None):

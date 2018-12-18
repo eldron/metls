@@ -647,6 +647,9 @@ class TLSRecordLayer(object):
         self.sock.flush()
         self.sock.buffer_writes = False
 
+    def sendSessionKeyDistributionMsg():
+        print 'msg sent'
+
     def _sendMsg(self, msg, randomizeFirstBlock = True):
         """Fragment and send message through socket"""
         #Whenever we're connected and asked to send an app data message,
@@ -666,13 +669,11 @@ class TLSRecordLayer(object):
         contentType = msg.contentType
         #Update handshake hashes
         if contentType == ContentType.handshake:
-            if not self.enable_metls:
-                self._handshake_hash.update(buf)
-            else:
-                if msg.handshakeType == HandshakeType.metls_finished:
-                    self._handshake_hash.update(msg.verify_data)
-                else:
-                    self._handshake_hash.update(buf)
+            self._handshake_hash.update(buf)
+            # if self.enable_metls and msg.handshakeType == HandshakeType.metls_finished:
+            #     self._handshake_hash.update(buf)
+            # else:
+            #     self._handshake_hash.update(buf)
 
         #Fragment big messages
         while len(buf) > self.recordSize:
@@ -916,13 +917,11 @@ class TLSRecordLayer(object):
                             yield result
 
                 #Update handshake hashes
-                if self.enable_metls:
-                    if subType == HandshakeType.metls_finished:
-                        self._handshake_hash.update(p.bytes[:constructorType])
-                    else:
-                        self._handshake_hash.update(p.bytes)
-                else:
-                    self._handshake_hash.update(p.bytes)
+                self._handshake_hash.update(p.bytes)
+                # if self.enable_metls and subType == HandshakeType.metls_finished:
+                #     self._handshake_hash.update(p.bytes)
+                # else:
+                #     self._handshake_hash.update(p.bytes)
 
                 #Parse based on handshake type
                 if subType == HandshakeType.client_hello:

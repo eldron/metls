@@ -265,8 +265,8 @@ class HandshakeSettings(object):
         # the symmetric key derived from IBE, used for version negotiation
         self.client_server_key = bytearray(32) 
         # client to server path middlebox id list
-        # each contains a tuple (id, access permission, symmetric key)
-        # id is of length 64 bytes, symmetric key is of length 32 bytes (use aes256)
+        # each contains a dictionary, {'middlebox_id', 'middlebox_permission', 'middlebox_tag_key'}
+        # id is of length 64 bytes, tag key is of length 32 bytes (use aes256)
         # access permission: bytearray, 1 byte, 0 for read only, 1 for read and write
         self.c_to_s_mb_list = []
         # server to client path middlebox id list
