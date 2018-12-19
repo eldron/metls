@@ -647,7 +647,7 @@ class TLSRecordLayer(object):
         self.sock.flush()
         self.sock.buffer_writes = False
 
-    def sendSessionKeyDistributionMsg():
+    def sendSessionKeyDistributionMsg(self):
         print 'msg sent'
 
     def _sendMsg(self, msg, randomizeFirstBlock = True):

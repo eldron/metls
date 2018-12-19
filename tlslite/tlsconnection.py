@@ -1345,6 +1345,16 @@ class TLSConnection(TLSRecordLayer):
                 middlebox_id = entry['middlebox_id']
                 middlebox_tag_key = derive_secret(secret, middlebox_id, server_finish_hs, 'sha256')
                 entry['middlebox_tag_key'] = middlebox_tag_key
+                if settings.calculate_ibe_keys:
+                    # calculate symmetric keys (and initial vectors) derived from ibe
+                else:
+                    # simulate local symmetric key cache
+                    # read symmetric key and iv from local file or simply generate them
+                    client_middlebox_key = secureHMAC(bytearray(32), bytearray("key") + middlebox_id, 'sha256')
+                    client_middlebox_iv = secureHMAC(bytearray(32), bytearray("iv") + middlebox_id, 'sha256')
+                entry['client_middlebox_key'] = client_middlebox_key
+                entry['client_middlebox_iv'] = client_middlebox_iv
+                
                 if settings.print_debug_info:
                     print 'middlebox_id is'
                     print ''.join(format(x, '02x') for x in middlebox_id)
