@@ -41,6 +41,8 @@ from .utils.cipherfactory import createAESGCM, createCHACHA20
 
 from .ibeutils import pairing_key_negotiation
 
+from .utils import openssl_aes
+
 class TLSConnection(TLSRecordLayer):
     """
     This class wraps a socket and provides TLS handshaking and data transfer.
@@ -1105,7 +1107,7 @@ class TLSConnection(TLSRecordLayer):
             return 'sha384', 48
         return 'sha256', 32
 
-    def clientSendSessionKeyDistributionMsg(self):
+    def clientSendKeyDistributionMsg(self):
         # the msg is sent right after client finished
         # application data msg can be sent right after this msg
         # i.e. client finished + key distribution msg + application data can
@@ -1116,16 +1118,38 @@ class TLSConnection(TLSRecordLayer):
             if entry['middlebox_permission'][0] == 0:
                 # read only middlebox
                 msg += secureHMAC(entry['client_middlebox_key'], b'read only middlebox', 'sha256')
-                # encrypt 
+                # encrypt client app traffic key and iv by client_middlebox_key and client_middlebox_iv
+                # client_middlebox_iv should be 16 bytes long
+                msg += openssl_aes.new(client_middlebox_key, 2, client_middlebox_iv).encrypt(self.cl_app_traffic_key + self.cl_app_traffic_iv)
             else:
                 msg += secureHMAC(entry['client_middlebox_key'], b'read write middlebox', 'sha256')
-            # encrypt 
+                # encrypt client app traffic key and iv
+                msg += openssl_aes.new(client_middlebox_key, 2, client_middlebox_iv).encrypt(self.cl_app_traffic_key + self.cl_app_traffic_iv)
+                # encrypt endpoint mac key
+                msg += openssl_aes.new(client_middlebox_key, 2, client_middlebox_iv).encrypt(self.endpoint_mac_key)
+            # encrypt middlebox tag key
+            msg += openssl_aes.new(client_middlebox_key, 2, client_middlebox_iv).encrypt(entry['middlebox_tag_key'])
+            # send msg through socket
 
-    def serverSendSessionKeyDistributionMsg(self):
+    def serverSendKeyDistributionMsg(self):
         # the msg is sent when server received client finished + key distribution msg + app data
         # server app data can be sent right after the msg
         # thus distribution msg + app data are sent on the same flight
-
+        msg = secureHMAC(self.endpoint_mac_key, b'server key distribution', 'sha256')
+        for entry in self.s_to_c_mb_list:
+            if entry['middlebox_permission'][0] == 0:
+                # read only middlebox
+                msg += secureHMAC(entry['server_middlebox_key'], b'read only middlebox', 'sha256')
+                msg += openssl_aes.new(server_middlebox_key, 2, server_middlebox_iv).encrypt(self.sr_app_traffic_key + self.sr_app_traffic_iv)
+            else:
+                # read write middlebox
+                msg += secureHMAC(entry['server_middlebox_key'], b'read write middlebox', 'sha256')
+                msg += openssl_aes.new(server_middlebox_key, 2, server_middlebox_iv).encrypt(self.sr_app_traffic_key + self.sr_app_traffic_iv)
+                msg += openssl_aes.new(server_middlebox_key, 2, server_middlebox_iv).encrypt(self.endpoint_mac_key)
+            # encrypt middlebox tag key
+            msg += openssl_aes.new(server_middlebox_key, 2, server_middlebox_iv).encrypt(entry['middlebox_tag_key'])
+            # send msg through socket
+            
     def _clientTLS13Handshake(self, settings, session, clientHello,
                               serverHello):
         """Perform TLS 1.3 handshake as a client."""
@@ -1386,13 +1410,13 @@ class TLSConnection(TLSRecordLayer):
                     # calculate symmetric keys (and initial vectors) derived from ibe
                     pairing_key_material = pairing_key_negotiation('client', middlebox_id)
                     client_middlebox_key = HKDF_expand_label(pairing_key_material, b'key', b'', 32, 'sha256')
-                    client_middlebox_iv = HKDF_expand_label(pairing_key_material, b'iv', b'', 12, 'sha256')
+                    client_middlebox_iv = HKDF_expand_label(pairing_key_material, b'iv', b'', 16, 'sha256')
                 else:
                     # simulate local symmetric key cache
                     # read symmetric key and iv from local file or simply generate them
                     pairing_key_material = secureHash(bytearray('client') + middlebox_id, 'sha256')
                     client_middlebox_key = HKDF_expand_label(pairing_key_material, b'key', b'', 32, 'sha256')
-                    client_middlebox_iv = HKDF_expand_label(pairing_key_material, b'iv', b'', 12, 'sha256')
+                    client_middlebox_iv = HKDF_expand_label(pairing_key_material, b'iv', b'', 16, 'sha256')
                 entry['client_middlebox_key'] = client_middlebox_key
                 entry['client_middlebox_iv'] = client_middlebox_iv
                 
