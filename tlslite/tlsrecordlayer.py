@@ -647,9 +647,6 @@ class TLSRecordLayer(object):
         self.sock.flush()
         self.sock.buffer_writes = False
 
-    def sendSessionKeyDistributionMsg(self):
-        print 'msg sent'
-
     def _sendMsg(self, msg, randomizeFirstBlock = True):
         """Fragment and send message through socket"""
         #Whenever we're connected and asked to send an app data message,

@@ -84,6 +84,11 @@ class TLSConnection(TLSRecordLayer):
         # whether the CCS was already sent in the connection (for hello retry)
         self._ccs_sent = False
 
+        self.cl_app_traffic_key = None
+        self.cl_app_traffic_iv = None
+        self.sr_app_traffic_key = None
+        self.sr_app_traffic_iv = None
+
     def keyingMaterialExporter(self, label, length=20):
         """Return keying material as described in RFC 5705
 
@@ -1100,6 +1105,27 @@ class TLSConnection(TLSRecordLayer):
             return 'sha384', 48
         return 'sha256', 32
 
+    def clientSendSessionKeyDistributionMsg(self):
+        # the msg is sent right after client finished
+        # application data msg can be sent right after this msg
+        # i.e. client finished + key distribution msg + application data can
+        # be sent on the same flight
+        # thus no additional RTT is required
+        msg = secureHMAC(self.endpoint_mac_key, b'client key distribution', 'sha256')
+        for entry in self.c_to_s_mb_list:
+            if entry['middlebox_permission'][0] == 0:
+                # read only middlebox
+                msg += secureHMAC(entry['client_middlebox_key'], b'read only middlebox', 'sha256')
+                # encrypt 
+            else:
+                msg += secureHMAC(entry['client_middlebox_key'], b'read write middlebox', 'sha256')
+            # encrypt 
+
+    def serverSendSessionKeyDistributionMsg(self):
+        # the msg is sent when server received client finished + key distribution msg + app data
+        # server app data can be sent right after the msg
+        # thus distribution msg + app data are sent on the same flight
+
     def _clientTLS13Handshake(self, settings, session, clientHello,
                               serverHello):
         """Perform TLS 1.3 handshake as a client."""
@@ -1329,6 +1355,15 @@ class TLSConnection(TLSRecordLayer):
         exporter_master_secret = derive_secret(secret,
                                                bytearray(b'exp master'),
                                                server_finish_hs, prfName)
+
+        if self.enable_metls:
+            self.cl_app_traffic_key = HKDF_expand_label(cl_app_traffic, b'key', b'', 32, 'sha384')
+            self.cl_app_traffic_iv = HKDF_expand_label(cl_app_traffic, b'iv', b'', 12, 'sha384')
+            if settings.print_debug_info:
+                print 'cl_app_traffic_key is'
+                print ''.join(format(x, '02x') for x in self.cl_app_traffic_key)
+                print 'cl_app_traffic_iv is'
+                print ''.join(format(x, '02x') for x in self.cl_app_traffic_iv)
 
         self._recordLayer.calcTLS1_3PendingState(
             serverHello.cipher_suite,
@@ -2571,6 +2606,14 @@ class TLSConnection(TLSRecordLayer):
                                                  settings
                                                  .cipherImplementations)
 
+        if self.enable_metls:
+            self.sr_app_traffic_key = HKDF_expand_label(sr_app_traffic, b'key', b'', 32, 'sha384')
+            self.sr_app_traffic_iv = HKDF_expand_label(sr_app_traffic, b'iv', b'', 12, 'sha384')
+            if settings.enable_metls:
+                print 'sr_app_traffic_key is'
+                print ''.join(format(x, '02x') for x in self.sr_app_traffic_key)
+                print 'sr_app_traffic_iv is'
+                print ''.join(format(x, '02x') for x in self.sr_app_traffic_iv)
         # all the messages sent by the server after the Finished message
         # MUST be encrypted with ap traffic secret, even if they regard
         # problems in processing client Certificate, CertificateVerify or

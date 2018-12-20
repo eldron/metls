@@ -8,7 +8,7 @@ import time
 if __name__ == '__main__':
     if len(sys.argv) != 5:
         print 'usage: ' + sys.argv[0] + ' server_ip server_port cipher_suite curve_name'
-        print 'cipher_suite can be aes128gcm, aes256gcm or chacha20-poly1305'
+        print 'cipher_suite can be aes256gcm or chacha20-poly1305'
         print 'curve_name can be x25519, x448, secp256r1, secp384r1 or secp521r1'
     else:
         server_ip = sys.argv[1]

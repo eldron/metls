@@ -591,6 +591,8 @@ class HandshakeSettings(object):
         other.s_to_c_mb_list = self.s_to_c_mb_list
         other.metls_mode = self.metls_mode
         other.calculate_ibe_keys = self.calculate_ibe_keys
+        if other.enable_metls:
+            other.cipherNames = ['aes256gcm']
         
         return other
 
