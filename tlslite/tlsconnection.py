@@ -39,6 +39,8 @@ from .keyexchange import KeyExchange, RSAKeyExchange, DHE_RSAKeyExchange, \
 from .handshakehelpers import HandshakeHelpers
 from .utils.cipherfactory import createAESGCM, createCHACHA20
 
+from .ibeutils import pairing_key_negotiation
+
 class TLSConnection(TLSRecordLayer):
     """
     This class wraps a socket and provides TLS handshaking and data transfer.
@@ -1347,11 +1349,15 @@ class TLSConnection(TLSRecordLayer):
                 entry['middlebox_tag_key'] = middlebox_tag_key
                 if settings.calculate_ibe_keys:
                     # calculate symmetric keys (and initial vectors) derived from ibe
+                    pairing_key_material = pairing_key_negotiation('client', middlebox_id)
+                    client_middlebox_key = HKDF_expand_label(pairing_key_material, b'key', b'', 32, 'sha256')
+                    client_middlebox_iv = HKDF_expand_label(pairing_key_material, b'iv', b'', 12, 'sha256')
                 else:
                     # simulate local symmetric key cache
                     # read symmetric key and iv from local file or simply generate them
-                    client_middlebox_key = secureHMAC(bytearray(32), bytearray("key") + middlebox_id, 'sha256')
-                    client_middlebox_iv = secureHMAC(bytearray(32), bytearray("iv") + middlebox_id, 'sha256')
+                    pairing_key_material = secureHash(bytearray('client') + middlebox_id, 'sha256')
+                    client_middlebox_key = HKDF_expand_label(pairing_key_material, b'key', b'', 32, 'sha256')
+                    client_middlebox_iv = HKDF_expand_label(pairing_key_material, b'iv', b'', 12, 'sha256')
                 entry['client_middlebox_key'] = client_middlebox_key
                 entry['client_middlebox_iv'] = client_middlebox_iv
                 
