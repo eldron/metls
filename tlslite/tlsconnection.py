@@ -1129,7 +1129,10 @@ class TLSConnection(TLSRecordLayer):
                 msg += openssl_aes.new(client_middlebox_key, 2, client_middlebox_iv).encrypt(self.endpoint_mac_key)
             # encrypt middlebox tag key
             msg += openssl_aes.new(client_middlebox_key, 2, client_middlebox_iv).encrypt(entry['middlebox_tag_key'])
-            # send msg through socket
+        # send msg through socket
+        message = Message(ContentType.application_data, msg)
+        for result in self._recordLayer._recordSocket.send(message):
+            pass
 
     def serverSendKeyDistributionMsg(self):
         # the msg is sent when server received client finished + key distribution msg + app data
@@ -1148,7 +1151,10 @@ class TLSConnection(TLSRecordLayer):
                 msg += openssl_aes.new(server_middlebox_key, 2, server_middlebox_iv).encrypt(self.endpoint_mac_key)
             # encrypt middlebox tag key
             msg += openssl_aes.new(server_middlebox_key, 2, server_middlebox_iv).encrypt(entry['middlebox_tag_key'])
-            # send msg through socket
+        # send msg through socket
+        message = Message(ContentType.application_data, msg)
+        for result in self._recordLayer._recordSocket.send(message):
+            pass
             
     def _clientTLS13Handshake(self, settings, session, clientHello,
                               serverHello):
@@ -1427,6 +1433,11 @@ class TLSConnection(TLSRecordLayer):
                     print ''.join(format(x, '02x') for x in middlebox_tag_key)
                     print 'middlebox_tag_key length is'
                     print len(middlebox_tag_key)
+                    print 'client_middlebox_key is'
+                    print ''.join(format(x, '02x') for x in client_middlebox_key)
+                    print 'client_middlebox_iv is'
+                    print ''.join(format(x, '02x') for x in client_middlebox_iv)
+                    
             for entry in self.s_to_c_mb_list:
                 middlebox_id = entry['middlebox_id']
                 middlebox_tag_key = derive_secret(secret, middlebox_id, server_finish_hs, 'sha256')
@@ -1474,6 +1485,16 @@ class TLSConnection(TLSRecordLayer):
         for result in self._sendMsgs(msgs):
             yield result
 
+
+        if self.enable_metls:
+            self.clientSendKeyDistributionMsg()
+            # read server key distribution msg
+            for result in self._recordLayer._recordSocket.recv():
+                if result not in (0, 1):
+                    (_, buf) = result
+                    tag = secureHMAC(self.endpoint_mac_key, b'server key distribution', 'sha256')
+                    if tag != buf[:32]:
+                        raise AssertionError("server key distribution msg not correct")
 
         # fully switch to application data
         self._changeWriteState()
@@ -2714,12 +2735,28 @@ class TLSConnection(TLSRecordLayer):
                 middlebox_id = entry['middlebox_id']
                 middlebox_permission = entry['middlebox_permission']
                 middlebox_tag_key = derive_secret(secret, middlebox_id, tmp_hash_state, 'sha256')
-                self.c_to_s_mb_list.append({'middlebox_id':middlebox_id, 'middlebox_permission':middlebox_permission, 'middlebox_tag_key':middlebox_tag_key})
+                if settings.calculate_ibe_keys:
+                    # calculate symmetric keys (and initial vectors) derived from ibe
+                    pairing_key_material = pairing_key_negotiation('server', middlebox_id)
+                    server_middlebox_key = HKDF_expand_label(pairing_key_material, b'key', b'', 32, 'sha256')
+                    server_middlebox_iv = HKDF_expand_label(pairing_key_material, b'iv', b'', 16, 'sha256')
+                else:
+                    # simulate local symmetric key cache
+                    # read symmetric key and iv from local file or simply generate them
+                    pairing_key_material = secureHash(bytearray('server') + middlebox_id, 'sha256')
+                    server_middlebox_key = HKDF_expand_label(pairing_key_material, b'key', b'', 32, 'sha256')
+                    server_middlebox_iv = HKDF_expand_label(pairing_key_material, b'iv', b'', 16, 'sha256')
+
+                self.c_to_s_mb_list.append({'middlebox_id':middlebox_id, 'middlebox_permission':middlebox_permission, 'middlebox_tag_key':middlebox_tag_key, 'server_middlebox_key':server_middlebox_key, 'server_middlebox_iv':server_middlebox_iv})
                 if settings.print_debug_info:
                     print 'middlebox_id is'
                     print ''.join(format(x, '02x') for x in middlebox_id)
                     print 'middlebox_tag_key is'
                     print ''.join(format(x, '02x') for x in middlebox_tag_key)
+                    print 'server_middlebox_key is'
+                    print ''.join(format(x, '02x') for x in server_middlebox_key)
+                    print 'server_middlebox_iv is'
+                    print ''.join(format(x, '02x') for x in server_middlebox_iv)
 
             self.endpoint_mac_key = derive_secret(secret, b'endpoint_mac_key', tmp_hash_state, 'sha256')
             self.endpoint_tag_key = derive_secret(secret, b'endpoint_tag_key', tmp_hash_state, 'sha256')
@@ -2785,6 +2822,17 @@ class TLSConnection(TLSRecordLayer):
 
         # switch to application_traffic_secret for client packets
         self._changeReadState()
+
+        if self.enable_metls:
+            # read client key distribution msg
+            for result in self._recordLayer._recordSocket.recv():
+                if result not in (0, 1):
+                    (_, buf) = result
+                    tag = secureHMAC(self.endpoint_mac_key, b'client key distribution', 'sha256')
+                    if tag != buf[:32]:
+                        raise AssertionError("client key distribution msg not correct")
+
+            self.serverSendKeyDistributionMsg()
 
         for result in self._serverSendTickets(settings):
             yield result
