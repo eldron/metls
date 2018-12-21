@@ -262,8 +262,6 @@ class HandshakeSettings(object):
 
         self.enable_metls = True
         self.metls_mode = 'cooperative' # 'standalone ' or 'cooperative'
-        # the symmetric key derived from IBE, used for version negotiation
-        self.client_server_key = bytearray(32) 
         # client to server path middlebox id list
         # each contains a dictionary, {'middlebox_id', 'middlebox_permission', 'middlebox_tag_key'}
         # id is of length 64 bytes, tag key is of length 32 bytes (use aes256)
@@ -585,7 +583,6 @@ class HandshakeSettings(object):
         self._sanity_check_ciphers(other)
 
         other.enable_metls = self.enable_metls
-        other.client_server_key = self.client_server_key
         other.print_debug_info = self.print_debug_info
         other.c_to_s_mb_list = self.c_to_s_mb_list
         other.s_to_c_mb_list = self.s_to_c_mb_list

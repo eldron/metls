@@ -664,6 +664,14 @@ class TLSConnection(TLSRecordLayer):
         else:
             assert False
 
+        if settings.enable_metls and self.client_server_key == None:
+            if settings.calculate_ibe_keys:
+                pairing_key_material = pairing_key_negotiation('client', 'server')
+                self.client_server_key = HKDF_expand_label(pairing_key_material, b'key', b'', 32, 'sha256')
+            else:
+                pairing_key_material = secureHash('client server key', 'sha256')
+                self.client_server_key = HKDF_expand_label(pairing_key_material, b'key', b'', 32, 'sha256')
+
         #Add any SCSVs. These are not real cipher suites, but signaling
         #values which reuse the cipher suite field in the ClientHello.
         wireCipherSuites = list(cipherSuites)
@@ -754,7 +762,7 @@ class TLSConnection(TLSRecordLayer):
                 if settings.enable_metls:
                     # set Random to 16 bytes random || HMAC(client_server_key, 16 bytes random)
                     lower_bytes = getRandomBytes(16)
-                    higher_bytes = secureHMAC(settings.client_server_key, lower_bytes, 'sha256')
+                    higher_bytes = secureHMAC(self.client_server_key, lower_bytes, 'sha256')
                     client_hello_random = lower_bytes + higher_bytes[:16]
                     if settings.print_debug_info:
                         print 'metls client hello random constructed'
@@ -777,7 +785,7 @@ class TLSConnection(TLSRecordLayer):
             if settings.enable_metls:
                 # set random for version negotiation
                 lower_bytes = getRandomBytes(16)
-                tmp = secureHMAC(settings.client_server_key, lower_bytes, 'sha256')
+                tmp = secureHMAC(self.client_server_key, lower_bytes, 'sha256')
                 client_hello_random = lower_bytes + tmp[:16]
                 if settings.print_debug_info:
                     print 'metls client hello random constructed'
@@ -1162,7 +1170,7 @@ class TLSConnection(TLSRecordLayer):
         if settings.enable_metls:
             lower_bytes = serverHello.random[:16]
             higher_bytes = serverHello.random[16:]
-            tmp = secureHMAC(settings.client_server_key, lower_bytes, 'sha256')
+            tmp = secureHMAC(self.client_server_key, lower_bytes, 'sha256')
             tmp = tmp[:16]
             self.enable_metls = (tmp == higher_bytes)
         else:
@@ -1437,7 +1445,7 @@ class TLSConnection(TLSRecordLayer):
                     print ''.join(format(x, '02x') for x in client_middlebox_key)
                     print 'client_middlebox_iv is'
                     print ''.join(format(x, '02x') for x in client_middlebox_iv)
-                    
+
             for entry in self.s_to_c_mb_list:
                 middlebox_id = entry['middlebox_id']
                 middlebox_tag_key = derive_secret(secret, middlebox_id, server_finish_hs, 'sha256')
@@ -2068,9 +2076,17 @@ class TLSConnection(TLSRecordLayer):
         if version > (3, 3):
             # read ClientHello.Random, see if we need to enable metls
             if settings.enable_metls:
+                if self.client_server_key == None:
+                    if settings.calculate_ibe_keys:
+                        pairing_key_material = pairing_key_negotiation('client', 'server')
+                        self.client_server_key = HKDF_expand_label(pairing_key_material, b'key', b'', 32, 'sha256')
+                    else:
+                        pairing_key_material = secureHash('client server key', 'sha256')
+                        self.client_server_key = HKDF_expand_label(pairing_key_material, b'key', b'', 32, 'sha256')
+                        
                 lower_bytes = clientHello.random[:16]
                 higher_bytes = clientHello.random[16:]
-                tmp = secureHMAC(settings.client_server_key, lower_bytes, 'sha256')
+                tmp = secureHMAC(self.client_server_key, lower_bytes, 'sha256')
                 tmp = tmp[:16]
                 self.enable_metls = (higher_bytes == tmp)     
             else:
@@ -2496,7 +2512,7 @@ class TLSConnection(TLSRecordLayer):
         serverHello = ServerHello()
         if self.enable_metls:
             lower_bytes = getRandomBytes(16)
-            tmp = secureHMAC(settings.client_server_key, lower_bytes, 'sha256')
+            tmp = secureHMAC(self.client_server_key, lower_bytes, 'sha256')
             server_hello_random = lower_bytes + tmp[:16]
             if settings.print_debug_info:
                 print 'metls server hello random constructed'

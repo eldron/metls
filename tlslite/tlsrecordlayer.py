@@ -186,6 +186,8 @@ class TLSRecordLayer(object):
         self.endpoint_mac_key = None
         # the symmetric key used by endpoints for path verification
         self.endpoint_tag_key = None
+        # the symmetric key derived from ibe
+        self.client_server_key = None
 
     @property
     def _client(self):
