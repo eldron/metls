@@ -29,7 +29,7 @@ if __name__ == '__main__':
 
         settings.enable_metls = True
         settings.print_debug_info = True
-        settings.client_server_key = bytearray(32)
+        settings.calculate_ibe_keys = False
         id1 = bytearray(64)
         id1[63] = 1
         id2 = bytearray(64)

@@ -23,7 +23,7 @@ if __name__ == '__main__':
 
 		settings = HandshakeSettings()
 		settings.enable_metls = True
-		settings.client_server_key = bytearray(32)
+		settings.calculate_ibe_keys = False
 		settings.print_debug_info = True
 		id3 = bytearray(64)
 		id3[63] = 3

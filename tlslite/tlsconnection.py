@@ -1123,16 +1123,18 @@ class TLSConnection(TLSRecordLayer):
         # thus no additional RTT is required
         msg = secureHMAC(self.endpoint_mac_key, b'client key distribution', 'sha256')
         for entry in self.c_to_s_mb_list:
+            client_middlebox_key = entry['client_middlebox_key']
+            client_middlebox_iv = entry['client_middlebox_iv']
             if entry['middlebox_permission'][0] == 0:
                 # read only middlebox
-                msg += secureHMAC(entry['client_middlebox_key'], b'read only middlebox', 'sha256')
+                msg += secureHMAC(client_middlebox_key, b'read only middlebox', 'sha256')
                 # encrypt client app traffic key and iv by client_middlebox_key and client_middlebox_iv
                 # client_middlebox_iv should be 16 bytes long
-                msg += openssl_aes.new(client_middlebox_key, 2, client_middlebox_iv).encrypt(self.cl_app_traffic_key + self.cl_app_traffic_iv)
+                msg += openssl_aes.new(client_middlebox_key, 2, client_middlebox_iv).encrypt(self.cl_app_traffic_key + self.cl_app_traffic_iv + bytearray(4))
             else:
-                msg += secureHMAC(entry['client_middlebox_key'], b'read write middlebox', 'sha256')
+                msg += secureHMAC(client_middlebox_key, b'read write middlebox', 'sha256')
                 # encrypt client app traffic key and iv
-                msg += openssl_aes.new(client_middlebox_key, 2, client_middlebox_iv).encrypt(self.cl_app_traffic_key + self.cl_app_traffic_iv)
+                msg += openssl_aes.new(client_middlebox_key, 2, client_middlebox_iv).encrypt(self.cl_app_traffic_key + self.cl_app_traffic_iv + bytearray(4))
                 # encrypt endpoint mac key
                 msg += openssl_aes.new(client_middlebox_key, 2, client_middlebox_iv).encrypt(self.endpoint_mac_key)
             # encrypt middlebox tag key
@@ -1148,14 +1150,16 @@ class TLSConnection(TLSRecordLayer):
         # thus distribution msg + app data are sent on the same flight
         msg = secureHMAC(self.endpoint_mac_key, b'server key distribution', 'sha256')
         for entry in self.s_to_c_mb_list:
+            server_middlebox_key = entry['server_middlebox_key']
+            server_middlebox_iv = entry['server_middlebox_iv']
             if entry['middlebox_permission'][0] == 0:
                 # read only middlebox
-                msg += secureHMAC(entry['server_middlebox_key'], b'read only middlebox', 'sha256')
-                msg += openssl_aes.new(server_middlebox_key, 2, server_middlebox_iv).encrypt(self.sr_app_traffic_key + self.sr_app_traffic_iv)
+                msg += secureHMAC(server_middlebox_key, b'read only middlebox', 'sha256')
+                msg += openssl_aes.new(server_middlebox_key, 2, server_middlebox_iv).encrypt(self.sr_app_traffic_key + self.sr_app_traffic_iv + bytearray(4))
             else:
                 # read write middlebox
-                msg += secureHMAC(entry['server_middlebox_key'], b'read write middlebox', 'sha256')
-                msg += openssl_aes.new(server_middlebox_key, 2, server_middlebox_iv).encrypt(self.sr_app_traffic_key + self.sr_app_traffic_iv)
+                msg += secureHMAC(server_middlebox_key, b'read write middlebox', 'sha256')
+                msg += openssl_aes.new(server_middlebox_key, 2, server_middlebox_iv).encrypt(self.sr_app_traffic_key + self.sr_app_traffic_iv + bytearray(4))
                 msg += openssl_aes.new(server_middlebox_key, 2, server_middlebox_iv).encrypt(self.endpoint_mac_key)
             # encrypt middlebox tag key
             msg += openssl_aes.new(server_middlebox_key, 2, server_middlebox_iv).encrypt(entry['middlebox_tag_key'])
@@ -1503,6 +1507,9 @@ class TLSConnection(TLSRecordLayer):
                     tag = secureHMAC(self.endpoint_mac_key, b'server key distribution', 'sha256')
                     if tag != buf[:32]:
                         raise AssertionError("server key distribution msg not correct")
+                    else:
+                        if settings.print_debug_info:
+                            print 'client received server key distribution msg'
 
         # fully switch to application data
         self._changeWriteState()
@@ -2847,6 +2854,8 @@ class TLSConnection(TLSRecordLayer):
                     tag = secureHMAC(self.endpoint_mac_key, b'client key distribution', 'sha256')
                     if tag != buf[:32]:
                         raise AssertionError("client key distribution msg not correct")
+                    else:
+                        print 'server received client key distribution msg'
 
             self.serverSendKeyDistributionMsg()
 
