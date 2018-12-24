@@ -50,6 +50,16 @@ if __name__ == '__main__':
 		conn.handshakeServer(certChain=cert_chain, privateKey=privateKey, reqCert=False, settings=settings)
 		print 'handshakeServer succeeded'
 
+		# test data transfer
+		count = 0
+		while True:
+			data = conn.recv(20000)
+			if len(data) > 0:
+				count += len(data)
+				print 'received ' + str(count) + ' bytes data'
+				conn.sendall(data)
+			else:
+				break
 		# while True:
 		# 	while True:
 		# 		request = conn.recv(2000)

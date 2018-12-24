@@ -2198,6 +2198,7 @@ class metlsApplicationData(object):
         self.endpoint_mac = endpoint_mac
         self.endpoint_random = endpoint_random
         self.endpoint_tag = endpoint_tag
+        return self
 
     def parse(self, p):
         length = len(p.bytes)
@@ -2205,6 +2206,7 @@ class metlsApplicationData(object):
         self.endpoint_mac = p.bytes[length - 96:length - 64]
         self.endpoint_random = p.bytes[length - 64:length - 32]
         self.endpoint_tag = p.bytes[length - 32:]
+        return self
 
     def write(self):
         return self.app_data + self.endpoint_mac + self.endpoint_random + self.endpoint_tag

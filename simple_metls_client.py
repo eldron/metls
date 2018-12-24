@@ -48,3 +48,14 @@ if __name__ == '__main__':
         print len(settings.s_to_c_mb_list)
 
         connection.handshakeClientCert(settings=settings)
+
+        # test data transfer
+        # s = 'hello world ' * 100000
+        # connection.sendall(s)
+
+        count = 0
+        for i in range(100):
+            connection.sendall('hello world' * 1000)
+            data = connection.recv(20000)
+            count += len(data)
+            print 'received ' + str(count) + ' bytes data'

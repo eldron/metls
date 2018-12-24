@@ -303,13 +303,14 @@ class TLSRecordLayer(object):
                             print 'mac value of application data is not correct'
                             self._shutdown(False)
                             raise
+                        print 'check mac passed'
                         # path verifycation
                         tmptag = secureHMAC(self.endpoint_tag_key, applicationData.endpoint_random, 'sha256')
                         if tmptag != applicationData.endpoint_tag:
                             print 'path verification failed'
-                            self._shutdown(False)
-                            raise
-                        self._readBuffer += application_data.app_data
+                        else:
+                            print 'path verification succeeded'
+                        self._readBuffer += applicationData.app_data
                 except TLSRemoteAlert as alert:
                     if alert.description != AlertDescription.close_notify:
                         raise
@@ -876,13 +877,7 @@ class TLSRecordLayer(object):
                 yield Alert().parse(p)
             elif recordHeader.type == ContentType.application_data:
                 if self.enable_metls:
-                    # check if this message is for session key distribution
-                    # if so, ignore the msg
-                    tmptag = secureHMAC(self.endpoint_mac_key, b'session key distribution', 'sha256')
-                    if tmptag == p.bytes[:32]:
-                        yield 0
-                    else:
-                        yield metlsApplicationData().parse(p)
+                    yield metlsApplicationData().parse(p)
                 else:
                     yield ApplicationData().parse(p)
             elif recordHeader.type == ContentType.handshake:
