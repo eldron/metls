@@ -1,0 +1,20 @@
+1. handshake network consumption
+handshake message size, vary the number of middleboxes
+number_of_middleboxes	handshake_msg_size (bytes)
+2						938
+4						1277
+6						1584
+8						1891
+10						2230
+12						2537
+14						2876
+16						3311
+18						3490
+20						3893
+22						4136
+24						4379
+26						4750
+28						5089
+30						5492
+
+

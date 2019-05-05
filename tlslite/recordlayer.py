@@ -53,6 +53,9 @@ class RecordSocket(object):
         self.version = (0, 0)
         self.tls13record = False
 
+        self.data_sent = 0
+        self.data_received = 0
+
     def _sockSendAll(self, data):
         """
         Send all data through socket
@@ -61,6 +64,8 @@ class RecordSocket(object):
         :param data: data to send
         :raises socket.error: when write to socket failed
         """
+        self.data_sent += len(data)
+
         while 1:
             try:
                 bytesSent = self.sock.send(data)
@@ -109,6 +114,8 @@ class RecordSocket(object):
             blocking and would block and bytearray in case the read finished
         :raises TLSAbruptCloseError: when the socket closed
         """
+        self.data_received += length
+        
         buf = bytearray(0)
 
         if length == 0:

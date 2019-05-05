@@ -50,12 +50,14 @@ if __name__ == '__main__':
 
         connection.handshakeClientCert(settings=settings)
 
+        handshake_msg_size = connection._recordLayer._recordSocket.data_sent + connection._recordLayer._recordSocket.data_received
+        print 'handshake message size is: ' + str(handshake_msg_size) + ' bytes'
         # test data transfer
         # s = 'hello world ' * 100000
         # connection.sendall(s)
 
         count = 0
-        for i in range(100):
+        for i in range(10):
             connection.sendall('hello world' * 1000)
             data = connection.recv(20000)
             count += len(data)
