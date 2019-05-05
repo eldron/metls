@@ -274,6 +274,7 @@ class HandshakeSettings(object):
         # whether client uses IBE to calculate symmetric keys shared with middlebox
         # or read from local keys cache
         self.calculate_ibe_keys = False
+        self.csibekey = None
         
     @staticmethod
     def _sanityCheckKeySizes(other):
@@ -588,6 +589,7 @@ class HandshakeSettings(object):
         other.s_to_c_mb_list = self.s_to_c_mb_list
         other.metls_mode = self.metls_mode
         other.calculate_ibe_keys = self.calculate_ibe_keys
+        other.csibekey = self.csibekey
         if other.enable_metls:
             other.cipherNames = ['aes256gcm']
         

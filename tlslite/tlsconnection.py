@@ -39,7 +39,7 @@ from .keyexchange import KeyExchange, RSAKeyExchange, DHE_RSAKeyExchange, \
 from .handshakehelpers import HandshakeHelpers
 from .utils.cipherfactory import createAESGCM, createCHACHA20
 
-from .ibeutils import pairing_key_negotiation
+#from .ibeutils import pairing_key_negotiation
 
 from .utils import openssl_aes
 
@@ -669,9 +669,9 @@ class TLSConnection(TLSRecordLayer):
                 pairing_key_material = pairing_key_negotiation('client', 'server')
                 self.client_server_key = HKDF_expand_label(pairing_key_material, b'key', b'', 32, 'sha256')
             else:
-                pairing_key_material = secureHash('client server key', 'sha256')
-                self.client_server_key = HKDF_expand_label(pairing_key_material, b'key', b'', 32, 'sha256')
-
+                #pairing_key_material = secureHash('client server key', 'sha256')
+                #self.client_server_key = HKDF_expand_label(pairing_key_material, b'key', b'', 32, 'sha256')
+                self.client_server_key = settings.csibekey
         #Add any SCSVs. These are not real cipher suites, but signaling
         #values which reuse the cipher suite field in the ClientHello.
         wireCipherSuites = list(cipherSuites)
@@ -1264,7 +1264,7 @@ class TLSConnection(TLSRecordLayer):
 
         # if we negotiated PSK then Certificate is not sent
         certificate = None
-        if not sr_psk:
+        if self.enable_metls is False and not sr_psk:
             for result in self._getMsg(ContentType.handshake,
                                        HandshakeType.certificate,
                                        CertificateType.x509):
@@ -1370,7 +1370,11 @@ class TLSConnection(TLSRecordLayer):
             if settings.print_debug_info:
                 print 'client received legacy finished'
 
-        finished_key = HKDF_expand_label(sr_handshake_traffic_secret,
+        if self.enable_metls:
+            finished_key = HKDF_expand_label(sr_handshake_traffic_secret + self.client_server_key,
+                                         b"finished", b'', prf_size, prfName)
+        else:
+            finished_key = HKDF_expand_label(sr_handshake_traffic_secret,
                                          b"finished", b'', prf_size, prfName)
         verify_data = secureHMAC(finished_key, transcript_hash, prfName)
 
@@ -1472,8 +1476,12 @@ class TLSConnection(TLSRecordLayer):
                 print 'endpoint_tag_key is'
                 print ''.join(format(x, '02x') for x in self.endpoint_tag_key)
 
-
-        cl_finished_key = HKDF_expand_label(cl_handshake_traffic_secret,
+        if self.enable_metls:
+            cl_finished_key = HKDF_expand_label(cl_handshake_traffic_secret + self.client_server_key,
+                                            b"finished", b'',
+                                            prf_size, prfName)
+        else:
+            cl_finished_key = HKDF_expand_label(cl_handshake_traffic_secret,
                                             b"finished", b'',
                                             prf_size, prfName)
         cl_verify_data = secureHMAC(
@@ -2088,9 +2096,10 @@ class TLSConnection(TLSRecordLayer):
                         pairing_key_material = pairing_key_negotiation('client', 'server')
                         self.client_server_key = HKDF_expand_label(pairing_key_material, b'key', b'', 32, 'sha256')
                     else:
-                        pairing_key_material = secureHash('client server key', 'sha256')
-                        self.client_server_key = HKDF_expand_label(pairing_key_material, b'key', b'', 32, 'sha256')
-                        
+                        #pairing_key_material = secureHash('client server key', 'sha256')
+                        #self.client_server_key = HKDF_expand_label(pairing_key_material, b'key', b'', 32, 'sha256')
+                        self.client_server_key = settings.csibekey
+
                 lower_bytes = clientHello.random[:16]
                 higher_bytes = clientHello.random[16:]
                 tmp = secureHMAC(self.client_server_key, lower_bytes, 'sha256')
@@ -2598,7 +2607,7 @@ class TLSConnection(TLSRecordLayer):
         for result in self._sendMsg(encryptedExtensions):
             yield result
 
-        if selected_psk is None:
+        if self.enable_metls is False and selected_psk is None:
             certificate = Certificate(CertificateType.x509, self.version)
             certificate.create(serverCertChain, bytearray())
             for result in self._sendMsg(certificate):
@@ -2636,7 +2645,11 @@ class TLSConnection(TLSRecordLayer):
             for result in self._sendMsg(certificate_verify):
                 yield result
 
-        finished_key = HKDF_expand_label(sr_handshake_traffic_secret,
+        if self.enable_metls:
+            finished_key = HKDF_expand_label(sr_handshake_traffic_secret + self.client_server_key,
+                                         b"finished", b'', prf_size, prf_name)
+        else:
+            finished_key = HKDF_expand_label(sr_handshake_traffic_secret,
                                          b"finished", b'', prf_size, prf_name)
         verify_data = secureHMAC(finished_key,
                                  self._handshake_hash.digest(prf_name),
@@ -2696,7 +2709,12 @@ class TLSConnection(TLSRecordLayer):
                                                prf_name)
 
         # verify Finished of client
-        cl_finished_key = HKDF_expand_label(cl_handshake_traffic_secret,
+        if self.enable_metls:
+            cl_finished_key = HKDF_expand_label(cl_handshake_traffic_secret + self.client_server_key,
+                                            b"finished", b'',
+                                            prf_size, prf_name)
+        else:
+            cl_finished_key = HKDF_expand_label(cl_handshake_traffic_secret,
                                             b"finished", b'',
                                             prf_size, prf_name)
         cl_verify_data = secureHMAC(cl_finished_key,
