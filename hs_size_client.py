@@ -11,12 +11,12 @@ import random
 import os
 
 if __name__ == '__main__':
-    if len(sys.argv) != 4:
-        print 'usage: ' + sys.argv[0] + ' server_ip server_port number_of_middleboxes'
+    if len(sys.argv) != 5:
+        print 'usage: ' + sys.argv[0] + ' enable_metls server_ip server_port number_of_middleboxes'
     else:
-        server_ip = sys.argv[1]
-        server_port = int(sys.argv[2])
-        number_of_middleboxes = int(sys.argv[3])
+        server_ip = sys.argv[2]
+        server_port = int(sys.argv[3])
+        number_of_middleboxes = int(sys.argv[4])
         cipher_suite = 'aes256gcm'
         curve_name = 'x25519'
 
@@ -31,7 +31,7 @@ if __name__ == '__main__':
         settings.defaultCurve = curve_name
         settings.keyShares = [curve_name]
 
-        settings.enable_metls = True
+        settings.enable_metls = (int(sys.argv[1]) == 1)
         settings.print_debug_info = True
         settings.calculate_ibe_keys = False
         settings.csibekey = bytearray(32)
