@@ -1294,10 +1294,10 @@ class RecordLayer(object):
                                                           prf_name)
 
         cl_app_key = HKDF_expand_label(cl_traffic_secret, b"key", b"", key_length, prf_name)
-        print 'RecordLayer: cl_app_key is'
-        print ''.join(format(x, '02x') for x in cl_app_key)
-        print 'fixedNonce is'
-        print ''.join(format(x, '02x') for x in clientPendingState.fixedNonce)
+        # print 'RecordLayer: cl_app_key is'
+        # print ''.join(format(x, '02x') for x in cl_app_key)
+        # print 'fixedNonce is'
+        # print ''.join(format(x, '02x') for x in clientPendingState.fixedNonce)
 
         serverPendingState.macContext = None
         serverPendingState.encContext = \
@@ -1312,10 +1312,10 @@ class RecordLayer(object):
                                                           prf_name)
 
         sr_app_key = HKDF_expand_label(sr_traffic_secret, b"key", b"", key_length, prf_name)
-        print 'RecordLayer: sr_app_key is'
-        print ''.join(format(x, '02x') for x in sr_app_key)
-        print 'fixedNonce is'
-        print ''.join(format(x, '02x') for x in serverPendingState.fixedNonce)
+        # print 'RecordLayer: sr_app_key is'
+        # print ''.join(format(x, '02x') for x in sr_app_key)
+        # print 'fixedNonce is'
+        # print ''.join(format(x, '02x') for x in serverPendingState.fixedNonce)
         
         if self.client:
             self._pendingWriteState = clientPendingState

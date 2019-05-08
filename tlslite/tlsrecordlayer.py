@@ -303,13 +303,37 @@ class TLSRecordLayer(object):
                             print 'mac value of application data is not correct'
                             self._shutdown(False)
                             raise
-                        print 'check mac passed'
-                        # path verifycation
+                        # print 'check mac passed'
+                        # # path verifycation
+                        # print 'applicationData.endpoint_random is'
+                        # print ''.join(format(x, '02x') for x in applicationData.endpoint_random)
+                        # print 'applicationData.endpoint_tag is'
+                        # print ''.join(format(x, '02x') for x in applicationData.endpoint_tag)
                         tmptag = secureHMAC(self.endpoint_tag_key, applicationData.endpoint_random, 'sha256')
+                        if self._client:
+                            # print 'client receiving data'
+                            # print 'server to client middlebox list length is ' + str(len(self.s_to_c_mb_list))
+                            for entry in self.s_to_c_mb_list:
+                                middlebox_tag_key = entry['middlebox_tag_key']
+                                # print 'middlebox_tag_key is'
+                                # print ''.join(format(x, '02x') for x in middlebox_tag_key)
+                                tmptag = secureHMAC(middlebox_tag_key, tmptag, 'sha256')
+                                # print 'tmptag is'
+                                # print ''.join(format(x, '02x') for x in tmptag)
+                        else:
+                            # print 'server receiving data'
+                            # print 'client to server middlebox list length is ' + str(len(self.c_to_s_mb_list))
+                            for entry in self.c_to_s_mb_list:
+                                middlebox_tag_key = entry['middlebox_tag_key']
+                                # print 'middlebox_tag_key is'
+                                # print ''.join(format(x, '02x') for x in middlebox_tag_key)
+                                tmptag = secureHMAC(middlebox_tag_key, tmptag, 'sha256')
+                                # print 'tmptag is'
+                                # print ''.join(format(x, '02x') for x in tmptag)
+                        
                         if tmptag != applicationData.endpoint_tag:
                             print 'path verification failed'
-                        else:
-                            print 'path verification succeeded'
+                            
                         self._readBuffer += applicationData.app_data
                 except TLSRemoteAlert as alert:
                     if alert.description != AlertDescription.close_notify:
@@ -386,6 +410,36 @@ class TLSRecordLayer(object):
                 endpoint_mac = secureHMAC(self.endpoint_mac_key, bytearray(s), 'sha256')
                 endpoint_random = getRandomBytes(32)
                 endpoint_tag = secureHMAC(self.endpoint_tag_key, endpoint_random, 'sha256')
+                
+                # for testing
+                if self._client:
+                    # print 'client sending data'
+                    # print 'endpoint_random is'
+                    # print ''.join(format(x, '02x') for x in endpoint_random)
+                    # print 'endpoint_tag is'
+                    # print ''.join(format(x, '02x') for x in endpoint_tag)
+                    for entry in self.c_to_s_mb_list:
+                        middlebox_tag_key = entry['middlebox_tag_key']
+                        # print 'middlebox_tag_key is'
+                        # print ''.join(format(x, '02x') for x in middlebox_tag_key)
+                        endpoint_tag = secureHMAC(middlebox_tag_key, endpoint_tag, 'sha256')
+                        # print 'endpoint_tag is'
+                        # print ''.join(format(x, '02x') for x in endpoint_tag)
+
+                else:
+                    # print 'server sending data'
+                    # print 'endpoint_random is'
+                    # print ''.join(format(x, '02x') for x in endpoint_random)
+                    # print 'endpoint_tag is'
+                    # print ''.join(format(x, '02x') for x in endpoint_tag)
+                    for entry in self.s_to_c_mb_list:
+                        middlebox_tag_key = entry['middlebox_tag_key']
+                        # print 'middlebox_tag_key is'
+                        # print ''.join(format(x, '02x') for x in middlebox_tag_key)
+                        endpoint_tag = secureHMAC(middlebox_tag_key, endpoint_tag, 'sha256')
+                        # print 'endpoint_tag is'
+                        # print ''.join(format(x, '02x') for x in endpoint_tag)
+
                 applicationData = metlsApplicationData().create(bytearray(s), endpoint_mac, endpoint_random, endpoint_tag)
             else:
                 applicationData = ApplicationData().create(bytearray(s))

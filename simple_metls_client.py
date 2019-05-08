@@ -4,17 +4,18 @@ from tlslite.api import *
 import sys
 import ipaddress
 import time
+import random
+import os
 
 if __name__ == '__main__':
-    if len(sys.argv) != 5:
-        print 'usage: ' + sys.argv[0] + ' server_ip server_port cipher_suite curve_name'
-        print 'cipher_suite can be aes256gcm or chacha20-poly1305'
-        print 'curve_name can be x25519, x448, secp256r1, secp384r1 or secp521r1'
+    if len(sys.argv) != 4:
+        print 'usage: ' + sys.argv[0] + ' server_ip server_port number_of_middleboxes'
     else:
         server_ip = sys.argv[1]
         server_port = int(sys.argv[2])
-        cipher_suite = sys.argv[3]
-        curve_name = sys.argv[4]
+        number_of_middleboxes = int(sys.argv[3])
+        cipher_suite = 'aes256gcm'
+        curve_name = 'x25519'
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.connect((server_ip, server_port))
@@ -28,23 +29,21 @@ if __name__ == '__main__':
         settings.keyShares = [curve_name]
 
         settings.enable_metls = True
-        settings.print_debug_info = True
+        settings.print_debug_info = False
         settings.calculate_ibe_keys = False
         settings.csibekey = bytearray(32)
-        id1 = bytearray(64)
-        id1[63] = 1
-        id2 = bytearray(64)
-        id2[63] = 2
-        permission1 = bytearray(1)
-        permission1[0] = 1
-        permission2 = bytearray(1)
-        permission2[0] = 1
-        mb1 = {'middlebox_id':id1, 'middlebox_permission':permission1}
-        mb2 = {'middlebox_id':id2, 'middlebox_permission':permission2}
-        settings.c_to_s_mb_list = [mb1, mb2]
-        settings.s_to_c_mb_list = [mb2, mb1]
+        settings.c_to_s_mb_list = []
+        settings.s_to_c_mb_list = []
 
-        print settings
+        # client introduce server to client middleboxes
+        for i in range(number_of_middleboxes):
+            mbid = bytearray(os.urandom(64))
+            permission = bytearray(1)
+            permission[0] = random.randint(0, 1)
+            mb = {'middlebox_id':mbid, 'middlebox_permission':permission}
+            settings.s_to_c_mb_list.append(mb)
+
+        #print settings
         print len(settings.c_to_s_mb_list)
         print len(settings.s_to_c_mb_list)
 

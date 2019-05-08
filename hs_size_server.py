@@ -8,8 +8,8 @@ from tlslite.api import *
 import os
 
 if __name__ == '__main__':
-	if len(sys.argv) != 4:
-		print 'usage: ' + sys.argv[0] + ' ip port number_of_middleboxes'
+	if len(sys.argv) != 3:
+		print 'usage: ' + sys.argv[0] + ' ip port'
 	else:
 		private_key_file = "serverX509Key.pem"
 		cert_file = "serverX509Cert.pem"
@@ -30,7 +30,7 @@ if __name__ == '__main__':
 
 		ip = sys.argv[1]
 		port = int(sys.argv[2])
-		number_of_middleboxes = int(sys.argv[3])
+		#number_of_middleboxes = int(sys.argv[3])
 		settings = HandshakeSettings()
 		settings.enable_metls = True
 		settings.calculate_ibe_keys = False
@@ -38,12 +38,12 @@ if __name__ == '__main__':
 		settings.print_debug_info = True
 		settings.c_to_s_mb_list = []
 		settings.s_to_c_mb_list = []
-		for i in range(number_of_middleboxes):
-			mbid = bytearray(os.urandom(64))
-			permission = bytearray(1)
-			permission[0] = random.randint(0, 1)
-			mb = {'middlebox_id':mbid, 'middlebox_permission':permission}
-			settings.c_to_s_mb_list.append(mb)
+		# for i in range(number_of_middleboxes):
+		# 	mbid = bytearray(os.urandom(64))
+		# 	permission = bytearray(1)
+		# 	permission[0] = random.randint(0, 1)
+		# 	mb = {'middlebox_id':mbid, 'middlebox_permission':permission}
+		# 	settings.c_to_s_mb_list.append(mb)
 
 		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		sock.bind((ip, port))
