@@ -1115,6 +1115,38 @@ class TLSConnection(TLSRecordLayer):
             return 'sha384', 48
         return 'sha256', 32
 
+    def clientSendKeyDistributionMsg_delayed(self):
+        # the msg is sent right after client finished
+        # application data msg can be sent right after this msg
+        # i.e. client finished + key distribution msg + application data can
+        # be sent on the same flight
+        # thus no additional RTT is required
+        if len(self.c_to_s_mb_list) > 0:
+            msg = secureHMAC(self.endpoint_mac_key, b'key distribution', 'sha256')
+            for entry in self.c_to_s_mb_list:
+                client_middlebox_key = entry['client_middlebox_key']
+                client_middlebox_iv = entry['client_middlebox_iv']
+                if entry['middlebox_permission'][0] == 0:
+                    # read only middlebox
+                    msg += secureHMAC(client_middlebox_key, b'read only middlebox', 'sha256')
+                    # encrypt client app traffic key and iv by client_middlebox_key and client_middlebox_iv
+                    # client_middlebox_iv should be 16 bytes long
+                    msg += openssl_aes.new(client_middlebox_key, 2, client_middlebox_iv).encrypt(self.cl_app_traffic_key + self.cl_app_traffic_iv + bytearray(4))
+                else:
+                    msg += secureHMAC(client_middlebox_key, b'read write middlebox', 'sha256')
+                    # encrypt client app traffic key and iv
+                    msg += openssl_aes.new(client_middlebox_key, 2, client_middlebox_iv).encrypt(self.cl_app_traffic_key + self.cl_app_traffic_iv + bytearray(4))
+                    # encrypt endpoint mac key
+                    msg += openssl_aes.new(client_middlebox_key, 2, client_middlebox_iv).encrypt(self.endpoint_mac_key)
+                # encrypt middlebox tag key
+                msg += openssl_aes.new(client_middlebox_key, 2, client_middlebox_iv).encrypt(entry['middlebox_tag_key'])
+            # send msg through socket
+            message = Message(ContentType.application_data, msg)
+            self.session_key_dist_msg = message
+        else:
+            self.session_key_dist_msg = None
+            self.session_key_dist_msg_sent = True
+
     def clientSendKeyDistributionMsg(self):
         # the msg is sent right after client finished
         # application data msg can be sent right after this msg
@@ -1143,6 +1175,33 @@ class TLSConnection(TLSRecordLayer):
         message = Message(ContentType.application_data, msg)
         for result in self._recordLayer._recordSocket.send(message):
             pass
+
+    def serverSendKeyDistributionMsg_delayed(self):
+        # the msg is sent when server received client finished + key distribution msg + app data
+        # server app data can be sent right after the msg
+        # thus distribution msg + app data are sent on the same flight
+        if len(self.s_to_c_mb_list) > 0:
+            msg = secureHMAC(self.endpoint_mac_key, b'key distribution', 'sha256')
+            for entry in self.s_to_c_mb_list:
+                server_middlebox_key = entry['server_middlebox_key']
+                server_middlebox_iv = entry['server_middlebox_iv']
+                if entry['middlebox_permission'][0] == 0:
+                    # read only middlebox
+                    msg += secureHMAC(server_middlebox_key, b'read only middlebox', 'sha256')
+                    msg += openssl_aes.new(server_middlebox_key, 2, server_middlebox_iv).encrypt(self.sr_app_traffic_key + self.sr_app_traffic_iv + bytearray(4))
+                else:
+                    # read write middlebox
+                    msg += secureHMAC(server_middlebox_key, b'read write middlebox', 'sha256')
+                    msg += openssl_aes.new(server_middlebox_key, 2, server_middlebox_iv).encrypt(self.sr_app_traffic_key + self.sr_app_traffic_iv + bytearray(4))
+                    msg += openssl_aes.new(server_middlebox_key, 2, server_middlebox_iv).encrypt(self.endpoint_mac_key)
+                # encrypt middlebox tag key
+                msg += openssl_aes.new(server_middlebox_key, 2, server_middlebox_iv).encrypt(entry['middlebox_tag_key'])
+            # send msg through socket
+            message = Message(ContentType.application_data, msg)
+            self.session_key_dist_msg = message
+        else:
+            self.session_key_dist_msg = None
+            self.session_key_dist_msg_sent = True
 
     def serverSendKeyDistributionMsg(self):
         # the msg is sent when server received client finished + key distribution msg + app data
@@ -1535,18 +1594,23 @@ class TLSConnection(TLSRecordLayer):
             yield result
 
 
+        # if self.enable_metls:
+        #     if len(self.c_to_s_mb_list) > 0:
+        #         self.clientSendKeyDistributionMsg()
+        #     if len(self.s_to_c_mb_list) > 0:
+        #         # read server key distribution msg
+        #         for result in self._recordLayer._recordSocket.recv():
+        #             if result not in (0, 1):
+        #                 (_, buf) = result
+        #                 tag = secureHMAC(self.endpoint_mac_key, b'server key distribution', 'sha256')
+        #                 if tag != buf[:32]:
+        #                     raise AssertionError("server key distribution msg not correct")
+        #                 else:
+        #                     if settings.print_debug_info:
+        #                         print 'client received server key distribution msg'
+
         if self.enable_metls:
-            self.clientSendKeyDistributionMsg()
-            # read server key distribution msg
-            for result in self._recordLayer._recordSocket.recv():
-                if result not in (0, 1):
-                    (_, buf) = result
-                    tag = secureHMAC(self.endpoint_mac_key, b'server key distribution', 'sha256')
-                    if tag != buf[:32]:
-                        raise AssertionError("server key distribution msg not correct")
-                    else:
-                        if settings.print_debug_info:
-                            print 'client received server key distribution msg'
+            self.clientSendKeyDistributionMsg_delayed()
 
         # fully switch to application data
         self._changeWriteState()
@@ -2634,7 +2698,7 @@ class TLSConnection(TLSRecordLayer):
         for result in self._sendMsg(encryptedExtensions):
             yield result
 
-        if self.enable_metls is False and selected_psk is None:
+        if (not self.enable_metls) and selected_psk is None:
             certificate = Certificate(CertificateType.x509, self.version)
             certificate.create(serverCertChain, bytearray())
             for result in self._sendMsg(certificate):
@@ -2917,19 +2981,24 @@ class TLSConnection(TLSRecordLayer):
         # switch to application_traffic_secret for client packets
         self._changeReadState()
 
-        if self.enable_metls:
-            # read client key distribution msg
-            for result in self._recordLayer._recordSocket.recv():
-                if result not in (0, 1):
-                    (_, buf) = result
-                    tag = secureHMAC(self.endpoint_mac_key, b'client key distribution', 'sha256')
-                    if tag != buf[:32]:
-                        raise AssertionError("client key distribution msg not correct")
-                    else:
-                        if settings.print_debug_info:
-                            print 'server received client key distribution msg'
+        # if self.enable_metls:
+        #     if len(self.c_to_s_mb_list) > 0:
+        #         # read client key distribution msg
+        #         for result in self._recordLayer._recordSocket.recv():
+        #             if result not in (0, 1):
+        #                 (_, buf) = result
+        #                 tag = secureHMAC(self.endpoint_mac_key, b'client key distribution', 'sha256')
+        #                 if tag != buf[:32]:
+        #                     raise AssertionError("client key distribution msg not correct")
+        #                 else:
+        #                     if settings.print_debug_info:
+        #                         print 'server received client key distribution msg'
 
-            self.serverSendKeyDistributionMsg()
+        #     if len(self.s_to_c_mb_list) > 0:
+        #         self.serverSendKeyDistributionMsg()
+
+        if self.enable_metls:
+            self.serverSendKeyDistributionMsg_delayed()
 
         for result in self._serverSendTickets(settings):
             yield result

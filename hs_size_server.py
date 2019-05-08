@@ -30,12 +30,11 @@ if __name__ == '__main__':
 
 		ip = sys.argv[1]
 		port = int(sys.argv[2])
-		#number_of_middleboxes = int(sys.argv[3])
 		settings = HandshakeSettings()
-		settings.enable_metls = True
+		settings.enable_metls = False
 		settings.calculate_ibe_keys = False
 		settings.csibekey = bytearray(32)
-		settings.print_debug_info = True
+		settings.print_debug_info = False
 		settings.c_to_s_mb_list = []
 		settings.s_to_c_mb_list = []
 		# for i in range(number_of_middleboxes):
@@ -49,13 +48,14 @@ if __name__ == '__main__':
 		sock.bind((ip, port))
 		sock.listen(5)
 		print 'server socket listening on ' + ip + ':' + str(port)
-		client_sock, client_addr = sock.accept()
-		conn = TLSConnection(client_sock)
-		print 'about to handshake'
-		conn.handshakeServer(certChain=cert_chain, privateKey=privateKey, reqCert=False, settings=settings)
-		print 'handshakeServer succeeded'
+		while True:
+			client_sock, client_addr = sock.accept()
+			conn = TLSConnection(client_sock)
+			print 'about to handshake'
+			conn.handshakeServer(certChain=cert_chain, privateKey=privateKey, reqCert=False, settings=settings)
+			print 'handshakeServer succeeded'
 
-		handshake_msg_size = conn._recordLayer._recordSocket.data_sent + conn._recordLayer._recordSocket.data_received
-		print 'handshake message size is: ' + str(handshake_msg_size) + ' bytes'
+			handshake_msg_size = conn._recordLayer._recordSocket.data_sent + conn._recordLayer._recordSocket.data_received
+			print 'handshake message size is: ' + str(handshake_msg_size) + ' bytes'
 
-		conn.close()
+			conn.close()

@@ -1,13 +1,12 @@
-# to test metls connection setup time
-# vary the number of middleboxes
-# client does not wait for server session key distribution msg,
-# thus make server to client middlebox list empty
+# test metls data transmission throughput
+# vary the number of middleboxes on server to client path
 
 import socket
 import sys
-import random
 from tlslite.api import *
+import random
 import os
+
 
 if __name__ == '__main__':
 	if len(sys.argv) != 3:
@@ -28,24 +27,16 @@ if __name__ == '__main__':
 		x509.parse(s)
 		cert_chain = X509CertChain([x509])
 
-		
-
 		ip = sys.argv[1]
 		port = int(sys.argv[2])
-		#number_of_middleboxes = int(sys.argv[3])
+
 		settings = HandshakeSettings()
 		settings.enable_metls = True
 		settings.calculate_ibe_keys = False
 		settings.csibekey = bytearray(32)
-		settings.print_debug_info = False
+		settings.print_debug_info = True
 		settings.c_to_s_mb_list = []
 		settings.s_to_c_mb_list = []
-		# for i in range(number_of_middleboxes):
-		# 	mbid = bytearray(os.urandom(64))
-		# 	permission = bytearray(1)
-		# 	permission[0] = random.randint(0, 1)
-		# 	mb = {'middlebox_id':mbid, 'middlebox_permission':permission}
-		# 	settings.c_to_s_mb_list.append(mb)
 
 		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		sock.bind((ip, port))
@@ -54,7 +45,24 @@ if __name__ == '__main__':
 		while True:
 			client_sock, client_addr = sock.accept()
 			conn = TLSConnection(client_sock)
-			#print 'about to handshake'
+			print 'about to handshake'
 			conn.handshakeServer(certChain=cert_chain, privateKey=privateKey, reqCert=False, settings=settings)
-			#print 'handshakeServer succeeded'
+			print 'handshakeServer succeeded'
+			# transmit data to client
+			amout = 1024 * 1024 * 50 # 50 MB data
+			cnt = 0
+			while cnt < amout:
+				conn.sendall(bytearray(4096))
+				cnt += 4096
 			conn.close()
+
+		# # test data transfer
+		# count = 0
+		# while True:
+		# 	data = conn.recv(20000)
+		# 	if len(data) > 0:
+		# 		count += len(data)
+		# 		print 'received ' + str(count) + ' bytes data'
+		# 		conn.sendall(data)
+		# 	else:
+		# 		break

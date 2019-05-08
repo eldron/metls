@@ -1,23 +1,22 @@
 1. handshake network consumption
 handshake message size, vary the number of middleboxes
 number_of_middleboxes	handshake_msg_size (bytes)
-0						631
-2						938
-4						1277
-6						1584
-8						1891
-10						2230
-12						2537
-14						2876
-16						3311
-18						3490
-20						3893
-22						4136
-24						4379
-26						4750
-28						5089
-30						5492
+0	557
+2	687
+4	817
+6	947
+8	1077
+10	1207
+12	1337
+14	1467
+16	1597
+18	1727
+20	1857
+22	1987
+24	2117
+26	2247
+28	2377
+30	2507
 
-
-1579 bytes when metls is not enabled, i.e., standard TLS 1.3
-if using Split connection, n middleboxes, (n + 1) * 1579 bytes
+1633 bytes when metls is not enabled, i.e., standard TLS 1.3
+if using Split connection, n middleboxes, (n + 1) * 1633 bytes

@@ -34,7 +34,7 @@ if __name__ == '__main__':
 		settings.enable_metls = True
 		settings.calculate_ibe_keys = False
 		settings.csibekey = bytearray(32)
-		settings.print_debug_info = False
+		settings.print_debug_info = True
 		settings.c_to_s_mb_list = []
 		settings.s_to_c_mb_list = []
 		# server introduce client to server middleboxes

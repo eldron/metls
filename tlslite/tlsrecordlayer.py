@@ -189,6 +189,10 @@ class TLSRecordLayer(object):
         # the symmetric key derived from ibe
         self.client_server_key = None
 
+        self.session_key_dist_msg = None
+        self.session_key_dist_msg_sent = False
+        self.session_key_dist_msg_received = False
+
     @property
     def _client(self):
         """Boolean stating if the endpoint acts as a client"""
@@ -333,7 +337,7 @@ class TLSRecordLayer(object):
                         
                         if tmptag != applicationData.endpoint_tag:
                             print 'path verification failed'
-                            
+
                         self._readBuffer += applicationData.app_data
                 except TLSRemoteAlert as alert:
                     if alert.description != AlertDescription.close_notify:
@@ -573,6 +577,12 @@ class TLSRecordLayer(object):
 
         :raises socket.error: If a socket error occurs.
         """
+        if self.enable_metls:
+            if not self.session_key_dist_msg_sent:
+                for result in self._recordLayer._recordSocket.send(self.session_key_dist_msg):
+                    pass
+                self.session_key_dist_msg_sent = True
+
         self.write(s)
         return len(s)
 
@@ -581,7 +591,36 @@ class TLSRecordLayer(object):
 
         :raises socket.error: If a socket error occurs.
         """
+        if self.enable_metls:
+            if not self.session_key_dist_msg_sent:
+                for result in self._recordLayer._recordSocket.send(self.session_key_dist_msg):
+                    pass
+                self.session_key_dist_msg_sent = True
+
         self.write(s)
+
+    def recvSessionDistMsg(self):
+        if self._client:
+            if len(self.s_to_c_mb_list) > 0:
+                pass
+            else:
+                self.session_key_dist_msg_received = True
+                return
+        else:
+            if len(self.c_to_s_mb_list) > 0:
+                pass
+            else:
+                self.session_key_dist_msg_received = True
+                return
+
+        for result in self._recordLayer._recordSocket.recv():
+            if result not in (0, 1):
+                (_, buf) = result
+                tag = secureHMAC(self.endpoint_mac_key, b'key distribution', 'sha256')
+                if tag != buf[:32]:
+                    raise AssertionError("key distribution msg not correct")
+                else:
+                    self.session_key_dist_msg_received = True
 
     def recv(self, bufsize):
         """Get some data from the TLS connection (socket emulation).
@@ -591,9 +630,15 @@ class TLSRecordLayer(object):
             without a preceding alert.
         :raises tlslite.errors.TLSAlert: If a TLS alert is signalled.
         """
+        if self.enable_metls and (not self.session_key_dist_msg_received):
+            self.recvSessionDistMsg()
+
         return self.read(bufsize)
 
     def recv_into(self, b):
+        if self.enable_metls and (not self.session_key_dist_msg_received):
+            self.recvSessionDistMsg()
+
         # XXX doc string
         data = self.read(len(b))
         if not data:

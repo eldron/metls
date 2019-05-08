@@ -1,3 +1,6 @@
+# # test metls data transmission throughput
+# vary the number of middleboxes on server to client path
+
 import socket
 from tlslite import TLSConnection
 from tlslite.api import *
@@ -28,7 +31,7 @@ if __name__ == '__main__':
         settings.defaultCurve = curve_name
         settings.keyShares = [curve_name]
 
-        settings.enable_metls = False
+        settings.enable_metls = True
         settings.print_debug_info = True
         settings.calculate_ibe_keys = False
         settings.csibekey = bytearray(32)
@@ -43,21 +46,15 @@ if __name__ == '__main__':
             mb = {'middlebox_id':mbid, 'middlebox_permission':permission}
             settings.s_to_c_mb_list.append(mb)
 
-        #print settings
-        print len(settings.c_to_s_mb_list)
-        print len(settings.s_to_c_mb_list)
-
         connection.handshakeClientCert(settings=settings)
 
-        handshake_msg_size = connection._recordLayer._recordSocket.data_sent + connection._recordLayer._recordSocket.data_received
-        print 'handshake message size is: ' + str(handshake_msg_size) + ' bytes'
-        # test data transfer
-        # s = 'hello world ' * 100000
-        # connection.sendall(s)
-
+        amout = 1024 * 1024 * 50
         count = 0
-        for i in range(10):
-            connection.sendall('hello world' * 1000)
-            data = connection.recv(20000)
-            count += len(data)
-            print 'received ' + str(count) + ' bytes data'
+        time1 = time.time()
+        while count < amout:
+        	data = connection.recv(4096)
+        	count += len(data)
+        time2 = time.time()
+        result = 200 / (time2 - time1)
+        print 'throughput is ' + str(result) + ' MB/s'
+        connection.close()
