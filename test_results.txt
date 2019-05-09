@@ -20,3 +20,6 @@ number_of_middleboxes	handshake_msg_size (bytes)
 
 1633 bytes when metls is not enabled, i.e., standard TLS 1.3
 if using Split connection, n middleboxes, (n + 1) * 1633 bytes
+
+
+1000 MB/s link speed
