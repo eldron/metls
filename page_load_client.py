@@ -20,6 +20,8 @@ if __name__ == '__main__':
         number_of_connections = int(sys.argv[5])
         amt = int(sys.argv[6])
 
+        blocksize = 16000
+
         cipher_suite = 'aes256gcm'
         curve_name = 'x25519'
 
@@ -53,13 +55,18 @@ if __name__ == '__main__':
             connection = TLSConnection(sock)
             connection.handshakeClientCert(settings=settings)
             # send page request to server
-            request = bytearray()
-            request.append((amt >> 16) & 0xff)
-            request.append((amt >> 8) & 0xff)
-            request.append(amt & 0xff)
-            connection.sendall(request)
+            #request = bytearray()
+            #request.append((amt >> 16) & 0xff)
+            #request.append((amt >> 8) & 0xff)
+            #request.append(amt & 0xff)
+            #connection.sendall(request)
+            while amt > blocksize:
+                data = connection.recv(blocksize)
+                amt = amt - blocksize
+            if amt > 0:
+                data = connection.recv(amt)
             # read page from server
-            response = connection.recv(amt)
+            #response = connection.recv(amt)
             connection.close()
             
         time2 = time.time()

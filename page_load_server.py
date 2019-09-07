@@ -9,8 +9,8 @@ import os
 
 
 if __name__ == '__main__':
-	if len(sys.argv) != 3:
-		print 'usage: ' + sys.argv[0] + ' ip port'
+	if len(sys.argv) != 4:
+		print 'usage: ' + sys.argv[0] + ' ip port pagesize'
 	else:
 		private_key_file = "serverX509Key.pem"
 		cert_file = "serverX509Cert.pem"
@@ -29,6 +29,8 @@ if __name__ == '__main__':
 
 		ip = sys.argv[1]
 		port = int(sys.argv[2])
+                pagesize = int(sys.argv[3])
+                blocksize = 16000
 
 		settings = HandshakeSettings()
 		settings.enable_metls = True
@@ -50,8 +52,13 @@ if __name__ == '__main__':
 			print 'handshakeServer succeeded'
 
 			# receive page request from client
-			request = bytearray(conn.recv(3))
-			amt = (request[0] << 16) | (request[1] << 8) | request[2]
-			# transmit data to client
-			conn.sendall(bytearray(amt))
+			#request = bytearray(conn.recv(3))
+			#amt = (request[0] << 16) | (request[1] << 8) | request[2]
+			
+                        # transmit data to client
+                        while pagesize > blocksize:
+                            conn.sendall(bytearray(blocksize))
+                            pagesize = pagesize - blocksize
+                        if pagesize > 0:
+			    conn.sendall(bytearray(pagesize))
 			conn.close()
