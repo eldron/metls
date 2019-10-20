@@ -1,6 +1,8 @@
 from tlslite.utils.cryptomath import *
 import time
 from tlslite.utils import pycrypto_aesgcm
+from tlslite.tlsconnection import *
+from tlslite.api import *
 
 authdata = bytearray(6)
 nonce = bytearray(12)
@@ -77,3 +79,50 @@ for i in range(times):
 time2 = time.time()
 result = (time2 * 1000 - time1 * 1000) / times
 print 'aesgcm open takes ' + str(result) + ' milisecond'
+
+
+print 'testing ecc exponential'
+kex = ECDHKeyExchange(GroupName.x25519, (3, 3))
+time1 = time.time()
+private = None
+public = None
+for i in range(times):
+	private = kex.get_random_private_key()
+time2 = time.time()
+result = (time2 * 1000 - time1 * 1000) / times
+print 'ecc get_random_private_key ' + str(result) + ' milisecond'
+
+time1 = time.time()
+for i in range(times):
+	public = kex.calc_public_value(private)
+time2 = time.time()
+result = (time2 * 1000 - time1 * 1000) / times
+print 'ecc calc_public_value ' + str(result) + ' milisecond'
+
+time1 = time.time()
+for i in range(times):
+	kex.calc_shared_key(private, public)
+time2 = time.time()
+result = (time2 * 1000 - time1 * 1000) / times
+print 'ecc calc_shared_key ' + str(result) + ' milisecond'
+
+print 'testing rsa signatrue generation time'
+private_key_file = "serverX509Key.pem"
+s = open(private_key_file, "rb").read()
+privateKey = parsePEMKey(s, private=True, implementations=["python"])
+data = bytearray(32)
+sig = None
+time1 = time.time()
+for i in range(times):
+	sig = privateKey.sign(data)
+time2 = time.time()
+result = (time2 * 1000 - time1 * 1000) / times
+print 'rsa signatrue generation time is ' + str(result) + ' milisecond'
+
+print 'testing rsa signatrue verification time'
+time1 = time.time()
+for i in range(times):
+	privateKey.verify(sig, data)
+time2 = time.time()
+result = (time2 * 1000 - time1 * 1000) / times
+print 'rsa signatrue verification time is ' + str(result) + ' milisecond'

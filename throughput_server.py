@@ -49,7 +49,7 @@ if __name__ == '__main__':
 			conn.handshakeServer(certChain=cert_chain, privateKey=privateKey, reqCert=False, settings=settings)
 			print 'handshakeServer succeeded'
 			# transmit data to client
-			amout = 1024 * 1024 * 50 # 50 MB data
+			amout = 1024 * 1024 * 5 # 5 MB data
 			cnt = 0
 			while cnt < amout:
 				conn.sendall(bytearray(4096))

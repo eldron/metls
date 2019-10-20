@@ -48,13 +48,13 @@ if __name__ == '__main__':
 
         connection.handshakeClientCert(settings=settings)
 
-        amout = 1024 * 1024 * 50
+        amout = 1024 * 1024 * 5
         count = 0
         time1 = time.time()
         while count < amout:
         	data = connection.recv(4096)
         	count += len(data)
         time2 = time.time()
-        result = 50 / (time2 - time1)
+        result = 5 / (time2 - time1)
         print 'throughput is ' + str(result) + ' MB/s'
         connection.close()
